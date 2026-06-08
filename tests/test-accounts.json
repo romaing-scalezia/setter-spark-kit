@@ -1,0 +1,33 @@
+{
+  "auth_provider": "Supabase Auth (via Lovable Cloud)",
+  "login_route": "/login",
+  "register_route": "/register",
+  "accounts_created_via": "signup API (auto-confirm enabled)",
+  "accounts": [
+    {
+      "role": "user",
+      "email": "lisa-test-user@test.com",
+      "password": "LisaLoops-Test-2024!",
+      "created": true,
+      "user_id": "f404f525-1ec2-4f43-abed-4a17b165d323",
+      "notes": "Default 'user' role. Onboarding marked complete via migration."
+    },
+    {
+      "role": "coach",
+      "email": "lisa-test-coach@test.com",
+      "password": "LisaLoops-Test-2024!",
+      "created": true,
+      "user_id": "b14b8646-ee07-4f2a-b6c2-86ecb85b555e",
+      "notes": "Coach role assigned via migration. Onboarding marked complete."
+    },
+    {
+      "role": "admin",
+      "email": "lisa-test-admin@test.com",
+      "password": "LisaLoops-Test-2024!",
+      "created": true,
+      "user_id": "3afcdf8e-592f-49cd-914e-a2f98f6044cf",
+      "notes": "Admin role assigned via migration. Onboarding marked complete. Has access to /admin and /admin/analytics."
+    }
+  ],
+  "cleanup_accounts": []
+}
