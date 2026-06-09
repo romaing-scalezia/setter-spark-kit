@@ -16,8 +16,6 @@ interface Entry {
 
 const cache: Map<string, Entry> = new Map();
 const inflight: Map<string, Promise<void>> = new Map();
-const imageCache: Map<string, string | null> = new Map(); // remote url -> object URL (or null on error)
-const imageInflight: Map<string, Promise<void>> = new Map();
 const subscribers = new Set<() => void>();
 
 function notify() {
@@ -57,11 +55,7 @@ async function fetchAttendee(attendeeId: string) {
         body: { action: 'get_attendee', attendee_id: attendeeId },
       });
       if (error) throw error;
-      const info = pickName(data);
-      cache.set(attendeeId, { status: 'loaded', info });
-      if (info.profile_picture_url) {
-        fetchImage(info.profile_picture_url);
-      }
+      cache.set(attendeeId, { status: 'loaded', info: pickName(data) });
     } catch {
       cache.set(attendeeId, { status: 'error' });
     } finally {
@@ -71,34 +65,6 @@ async function fetchAttendee(attendeeId: string) {
   })();
 
   inflight.set(attendeeId, p);
-  return p;
-}
-
-async function fetchImage(remoteUrl: string) {
-  if (imageCache.has(remoteUrl)) return;
-  if (imageInflight.has(remoteUrl)) return imageInflight.get(remoteUrl);
-
-  const p = (async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('unipile-proxy', {
-        body: { action: 'get_image', url: remoteUrl },
-      });
-      if (error) throw error;
-      const blob =
-        data instanceof Blob
-          ? data
-          : new Blob([data as ArrayBuffer]);
-      const objectUrl = URL.createObjectURL(blob);
-      imageCache.set(remoteUrl, objectUrl);
-    } catch {
-      imageCache.set(remoteUrl, null);
-    } finally {
-      imageInflight.delete(remoteUrl);
-      notify();
-    }
-  })();
-
-  imageInflight.set(remoteUrl, p);
   return p;
 }
 
@@ -144,8 +110,7 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
   const name =
     [first_name, last_name].filter(Boolean).join(' ').trim() ||
     truncate(attendeeId);
-  const objectUrl = profile_picture_url ? imageCache.get(profile_picture_url) ?? null : null;
-  return { name, avatarUrl: objectUrl, loading: false };
+  return { name, avatarUrl: profile_picture_url ?? null, loading: false };
 }
 
 export function useAttendeeNamesPrefetch(ids: Array<string | null | undefined>) {
