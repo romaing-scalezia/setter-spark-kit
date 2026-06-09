@@ -76,9 +76,6 @@ function ConversationRow({
             )}
           </div>
         </div>
-        <p className="truncate text-xs text-muted-foreground">
-          {conversation.last_message || '—'}
-        </p>
       </div>
     </button>
   );
