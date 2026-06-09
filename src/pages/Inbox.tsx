@@ -88,26 +88,75 @@ function ConversationHeaderName({ conversation }: { conversation: UnipileConvers
   return <p className="text-sm font-medium">{name}</p>;
 }
 
-function Avatar({ name, url }: { name: string; url: string | null }) {
+const AVATAR_COLORS = [
+  'bg-red-500',
+  'bg-orange-500',
+  'bg-amber-500',
+  'bg-yellow-500',
+  'bg-lime-500',
+  'bg-green-500',
+  'bg-emerald-500',
+  'bg-teal-500',
+  'bg-cyan-500',
+  'bg-sky-500',
+  'bg-blue-500',
+  'bg-indigo-500',
+  'bg-violet-500',
+  'bg-purple-500',
+  'bg-fuchsia-500',
+  'bg-pink-500',
+  'bg-rose-500',
+];
+
+function hashColor(name: string): string {
+  let hash = 0;
+  const s = name || '?';
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash * 31 + s.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(hash) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[idx];
+}
+
+function Avatar({
+  name,
+  url,
+  size = 'md',
+}: {
+  name: string;
+  url: string | null;
+  size?: 'md' | 'lg';
+}) {
   const [hasError, setHasError] = useState(false);
   const showImg = !!url && !hasError;
+  const dim = size === 'lg' ? 'h-10 w-10 text-sm' : 'h-9 w-9 text-xs';
   return (
     <>
       {showImg && (
         <img
           src={url!}
           alt={name}
-          className="h-9 w-9 shrink-0 rounded-full object-cover"
-          onError={() => setHasError(true)}
+          className={`${dim} shrink-0 rounded-full object-cover`}
+          onError={(e) => {
+            e.preventDefault();
+            setHasError(true);
+          }}
         />
       )}
       {!showImg && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+        <div
+          className={`${dim} flex shrink-0 items-center justify-center rounded-full font-medium text-white ${hashColor(name)}`}
+        >
           {(name?.[0] ?? '?').toUpperCase()}
         </div>
       )}
     </>
   );
+}
+
+function ConversationHeaderAvatar({ conversation }: { conversation: UnipileConversation }) {
+  const { name, avatarUrl } = useConversationDisplay(conversation);
+  return <Avatar name={name} url={avatarUrl} size="lg" />;
 }
 
 function formatTs(ts: string | null) {
@@ -286,11 +335,14 @@ export default function Inbox() {
           ) : (
             <>
               <header className="flex items-center justify-between border-b p-4">
-                <div>
-                  <ConversationHeaderName conversation={selected} />
-                  <p className="text-xs text-muted-foreground">
-                    {formatTs(selected.timestamp)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <ConversationHeaderAvatar conversation={selected} />
+                  <div>
+                    <ConversationHeaderName conversation={selected} />
+                    <p className="text-xs text-muted-foreground">
+                      {formatTs(selected.timestamp)}
+                    </p>
+                  </div>
                 </div>
                 {linkedLead ? (
                   <Link
