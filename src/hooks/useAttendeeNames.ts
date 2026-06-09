@@ -43,8 +43,8 @@ function pickName(data: any): AttendeeInfo {
     data?.publicProfileUrl ??
     null;
   const linkedin_url =
-    explicitUrl ??
-    (publicId ? `https://www.linkedin.com/in/${publicId}/` : null);
+    (publicId ? `https://www.linkedin.com/in/${publicId}/` : null) ??
+    explicitUrl;
   // Fallback: split `name` if first/last absent
   if (!first && !last && typeof data?.name === 'string') {
     const parts = data.name.trim().split(/\s+/);
