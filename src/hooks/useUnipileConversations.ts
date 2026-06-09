@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface UnipileConversation {
@@ -37,28 +37,80 @@ function normalize(item: any): UnipileConversation {
   };
 }
 
+async function fetchPage(account_id: string, cursor: string | null) {
+  const body: Record<string, any> = { action: 'get_conversations', account_id };
+  if (cursor) body.cursor = cursor;
+  const { data, error } = await supabase.functions.invoke('unipile-proxy', { body });
+  if (error) throw error;
+  const rawItems: any[] =
+    (data as any)?.items ??
+    (data as any)?.chats ??
+    (data as any)?.data ??
+    (Array.isArray(data) ? (data as any) : []);
+  const items = rawItems.map(normalize).filter((c) => c.id);
+  const nextCursor: string | null =
+    (data as any)?.cursor ??
+    (data as any)?.next_cursor ??
+    (data as any)?.paging?.cursor ??
+    null;
+  return { items, cursor: nextCursor };
+}
+
 export function useUnipileConversations(account_id: string | null | undefined) {
-  const query = useQuery({
-    queryKey: ['unipile-conversations', account_id],
-    enabled: !!account_id,
-    staleTime: 30_000,
-    queryFn: async (): Promise<UnipileConversation[]> => {
-      const { data, error } = await supabase.functions.invoke('unipile-proxy', {
-        body: { action: 'get_conversations', account_id },
+  const [conversations, setConversations] = useState<UnipileConversation[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const reqIdRef = useRef(0);
+
+  const initialLoad = useCallback(async () => {
+    if (!account_id) return;
+    const myReq = ++reqIdRef.current;
+    setLoading(true);
+    try {
+      const { items, cursor: nextCursor } = await fetchPage(account_id, null);
+      if (reqIdRef.current !== myReq) return;
+      setConversations(items);
+      setCursor(nextCursor);
+    } finally {
+      if (reqIdRef.current === myReq) setLoading(false);
+    }
+  }, [account_id]);
+
+  useEffect(() => {
+    if (!account_id) {
+      setConversations([]);
+      setCursor(null);
+      return;
+    }
+    initialLoad();
+  }, [account_id, initialLoad]);
+
+  const loadMore = useCallback(async () => {
+    if (!account_id || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const { items, cursor: nextCursor } = await fetchPage(account_id, cursor);
+      setConversations((prev) => {
+        const seen = new Set(prev.map((c) => c.id));
+        const merged = [...prev];
+        for (const it of items) {
+          if (!seen.has(it.id)) merged.push(it);
+        }
+        return merged;
       });
-      if (error) throw error;
-      const items: any[] =
-        (data as any)?.items ??
-        (data as any)?.chats ??
-        (data as any)?.data ??
-        (Array.isArray(data) ? (data as any) : []);
-      return items.map(normalize).filter((c) => c.id);
-    },
-  });
+      setCursor(nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [account_id, cursor, loadingMore]);
 
   return {
-    conversations: query.data ?? [],
-    loading: query.isLoading,
-    refetch: query.refetch,
+    conversations,
+    loading,
+    loadingMore,
+    hasMore: cursor !== null,
+    loadMore,
+    refetch: initialLoad,
   };
 }

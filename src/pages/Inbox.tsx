@@ -157,9 +157,13 @@ export default function Inbox() {
     }
   }, [accountLoading, account, navigate, toast]);
 
-  const { conversations, loading: convosLoading } = useUnipileConversations(
-    account?.account_id ?? null,
-  );
+  const {
+    conversations,
+    loading: convosLoading,
+    loadingMore,
+    hasMore,
+    loadMore,
+  } = useUnipileConversations(account?.account_id ?? null);
   const { messages, loading: msgsLoading, refetch: refetchMessages } =
     useUnipileMessages(selected?.id ?? null);
   const { data: linkedLead, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
@@ -251,6 +255,25 @@ export default function Inbox() {
                   );
                 })}
               </ul>
+            )}
+            {!convosLoading && hasMore && !loadingMore && (
+              <div className="p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => loadMore()}
+                >
+                  Charger plus
+                </Button>
+              </div>
+            )}
+            {loadingMore && (
+              <div className="space-y-2 p-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
             )}
           </ScrollArea>
         </aside>
