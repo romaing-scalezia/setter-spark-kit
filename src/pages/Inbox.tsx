@@ -257,7 +257,7 @@ export default function Inbox() {
               </ul>
             )}
             {!convosLoading && hasMore && !loadingMore && (
-              <div className="flex justify-center p-3">
+              <div className="flex w-full justify-center p-3">
                 <Button
                   variant="outline"
                   size="sm"
