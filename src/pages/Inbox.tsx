@@ -335,11 +335,14 @@ export default function Inbox() {
           ) : (
             <>
               <header className="flex items-center justify-between border-b p-4">
-                <div>
-                  <ConversationHeaderName conversation={selected} />
-                  <p className="text-xs text-muted-foreground">
-                    {formatTs(selected.timestamp)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <ConversationHeaderAvatar conversation={selected} />
+                  <div>
+                    <ConversationHeaderName conversation={selected} />
+                    <p className="text-xs text-muted-foreground">
+                      {formatTs(selected.timestamp)}
+                    </p>
+                  </div>
                 </div>
                 {linkedLead ? (
                   <Link
