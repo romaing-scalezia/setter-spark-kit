@@ -30,11 +30,10 @@ function getAttendeeProviderId(c: UnipileConversation): string | null {
   );
 }
 
-function ConversationDisplay({
-  conversation,
-}: {
-  conversation: UnipileConversation;
-}): { name: string; avatarUrl: string | null } {
+function useConversationDisplay(conversation: UnipileConversation): {
+  name: string;
+  avatarUrl: string | null;
+} {
   const hasName = !!conversation.name && conversation.name !== '—';
   const attendeeId = hasName ? null : getAttendeeProviderId(conversation);
   const { name: resolvedName, avatarUrl } = useAttendeeName(attendeeId);
@@ -53,7 +52,7 @@ function ConversationRow({
   active: boolean;
   onSelect: () => void;
 }) {
-  const { name, avatarUrl } = ConversationDisplay({ conversation });
+  const { name, avatarUrl } = useConversationDisplay(conversation);
   return (
     <button
       onClick={onSelect}
@@ -88,7 +87,7 @@ function ConversationRow({
 }
 
 function ConversationHeaderName({ conversation }: { conversation: UnipileConversation }) {
-  const { name } = ConversationDisplay({ conversation });
+  const { name } = useConversationDisplay(conversation);
   return <p className="text-sm font-medium">{name}</p>;
 }
 
