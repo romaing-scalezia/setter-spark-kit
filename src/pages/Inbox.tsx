@@ -374,9 +374,54 @@ export default function Inbox() {
           open={linkOpen}
           onOpenChange={setLinkOpen}
           chatId={selected.id}
+          linkedinUrl={attendeeLinkedinUrl}
           onLinked={() => {
             refetchLinked();
             queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
+          }}
+        />
+      )}
+
+      {selected && (
+        <CreateLeadModal
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          initialValues={{
+            first_name: attendeeFirstName,
+            last_name: attendeeLastName,
+            linkedin_url: attendeeLinkedinUrl,
+          }}
+          onSubmit={async (data) => {
+            if (!user) return;
+            const { data: lead, error } = await (supabase.from('leads') as any)
+              .insert({
+                owner_id: user.id,
+                setter_id: data.setter_id || user.id,
+                first_name: data.first_name,
+                last_name: data.last_name,
+                linkedin_url: data.linkedin_url || null,
+                persona_id: data.persona_id || null,
+                outreach_type: (data.outreach_type || null) as any,
+                status: 'conversation_engagee',
+                conversation_started_at: new Date().toISOString(),
+                unipile_chat_id: selected.id,
+              })
+              .select()
+              .single();
+            if (error) {
+              toast({ variant: 'destructive', title: 'Erreur', description: error.message });
+              return;
+            }
+            await (supabase.from('lead_events') as any).insert({
+              lead_id: lead.id,
+              user_id: user.id,
+              event_type: 'lead_created',
+              new_value: 'conversation_engagee',
+            });
+            toast({ title: 'Lead créé et lié à la conversation' });
+            refetchLinked();
+            queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
+            queryClient.invalidateQueries({ queryKey: ['leads'] });
           }}
         />
       )}
