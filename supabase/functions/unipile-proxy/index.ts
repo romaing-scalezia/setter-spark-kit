@@ -145,6 +145,18 @@ serve(async (req) => {
         );
       }
 
+      case "get_attendee": {
+        const { attendee_id } = body;
+        if (!attendee_id) {
+          return jsonResponse({ error: "Missing 'attendee_id'" }, 400);
+        }
+        return await unipileJson(
+          `/api/v1/chat_attendees/${encodeURIComponent(attendee_id)}`,
+          { method: "GET" },
+          apiKey,
+        );
+      }
+
       case "get_messages": {
         const { chat_id } = body;
         if (!chat_id) {
