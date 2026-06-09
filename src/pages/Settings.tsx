@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { AppRole } from '@/contexts/AuthContext';
+import { LinkedInIntegrationCard } from '@/components/LinkedInIntegrationCard';
 
 const DEBUG_ROLES: AppRole[] = ['user', 'coach', 'admin'];
 
@@ -96,6 +97,8 @@ export default function SettingsPage() {
             </Button>
           </CardContent>
         </Card>
+
+        <LinkedInIntegrationCard />
 
         {activeRole === 'admin' && (
           <Card>
