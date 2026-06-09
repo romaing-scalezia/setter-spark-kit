@@ -36,11 +36,17 @@ function useConversationDisplay(conversation: UnipileConversation): {
   name: string;
   avatarUrl: string | null;
 } {
-  const hasName = !!conversation.name && conversation.name !== '—';
-  const attendeeId = hasName ? null : getAttendeeProviderId(conversation);
+  const raw = (conversation.raw ?? {}) as any;
+  const type = raw.type;
+  const contentType = raw.content_type;
+  const isGroup = type === 1;
+  const isInmail = type === 0 && contentType === 'inmail';
+  // Group: use conversation.name as-is. Otherwise (1:1, including inmail): resolve via attendee.
+  const attendeeId = isGroup ? null : getAttendeeProviderId(conversation);
   const { name: resolvedName, avatarUrl } = useAttendeeName(attendeeId);
+  const fallbackName = conversation.name && conversation.name !== '—' ? conversation.name : '—';
   return {
-    name: hasName ? conversation.name : resolvedName,
+    name: isGroup ? fallbackName : resolvedName,
     avatarUrl: avatarUrl ?? conversation.picture_url ?? null,
   };
 }
