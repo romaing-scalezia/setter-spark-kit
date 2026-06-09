@@ -18,6 +18,79 @@ import {
 } from '@/hooks/useUnipileConversations';
 import { useUnipileMessages } from '@/hooks/useUnipileMessages';
 import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
+import { useAttendeeName } from '@/hooks/useAttendeeNames';
+
+function getAttendeeProviderId(c: UnipileConversation): string | null {
+  const r = c.raw ?? {};
+  return (
+    r.attendee_provider_id ??
+    r.attendees?.[0]?.provider_id ??
+    r.attendees?.[0]?.attendee_provider_id ??
+    null
+  );
+}
+
+function ConversationDisplay({
+  conversation,
+}: {
+  conversation: UnipileConversation;
+}): { name: string; avatarUrl: string | null } {
+  const hasName = !!conversation.name && conversation.name !== '—';
+  const attendeeId = hasName ? null : getAttendeeProviderId(conversation);
+  const { name: resolvedName, avatarUrl } = useAttendeeName(attendeeId);
+  return {
+    name: hasName ? conversation.name : resolvedName,
+    avatarUrl: avatarUrl ?? conversation.picture_url ?? null,
+  };
+}
+
+function ConversationRow({
+  conversation,
+  active,
+  onSelect,
+}: {
+  conversation: UnipileConversation;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const { name, avatarUrl } = ConversationDisplay({ conversation });
+  return (
+    <button
+      onClick={onSelect}
+      className={`flex w-full items-start gap-3 p-3 text-left hover:bg-muted/60 ${
+        active ? 'bg-muted' : ''
+      }`}
+    >
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+          {(name?.[0] ?? '?').toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-sm font-medium">{name}</p>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {formatTs(conversation.timestamp)}
+          </span>
+        </div>
+        <p className="truncate text-xs text-muted-foreground">
+          {conversation.last_message || '—'}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function ConversationHeaderName({ conversation }: { conversation: UnipileConversation }) {
+  const { name } = ConversationDisplay({ conversation });
+  return <p className="text-sm font-medium">{name}</p>;
+}
 
 function formatTs(ts: string | null) {
   if (!ts) return '';
@@ -142,27 +215,11 @@ export default function Inbox() {
                   const active = selected?.id === c.id;
                   return (
                     <li key={c.id}>
-                      <button
-                        onClick={() => setSelected(c)}
-                        className={`flex w-full items-start gap-3 p-3 text-left hover:bg-muted/60 ${
-                          active ? 'bg-muted' : ''
-                        }`}
-                      >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                          {(c.name?.[0] ?? '?').toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <p className="truncate text-sm font-medium">{c.name}</p>
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
-                              {formatTs(c.timestamp)}
-                            </span>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {c.last_message || '—'}
-                          </p>
-                        </div>
-                      </button>
+                      <ConversationRow
+                        conversation={c}
+                        active={active}
+                        onSelect={() => setSelected(c)}
+                      />
                     </li>
                   );
                 })}
@@ -181,7 +238,7 @@ export default function Inbox() {
             <>
               <header className="flex items-center justify-between border-b p-4">
                 <div>
-                  <p className="text-sm font-medium">{selected.name}</p>
+                  <ConversationHeaderName conversation={selected} />
                   <p className="text-xs text-muted-foreground">
                     {formatTs(selected.timestamp)}
                   </p>
