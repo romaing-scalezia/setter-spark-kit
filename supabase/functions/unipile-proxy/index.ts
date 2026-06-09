@@ -199,6 +199,32 @@ serve(async (req) => {
         return await unipileMultipart("/api/v1/chats", fd, apiKey);
       }
 
+      case "get_image": {
+        const { url } = body;
+        if (!url || typeof url !== "string") {
+          return jsonResponse({ error: "Missing 'url'" }, 400);
+        }
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.linkedin.com/",
+          },
+        });
+        if (!res.ok) {
+          return jsonResponse({ error: "Image fetch failed", status: res.status }, res.status);
+        }
+        const contentType = res.headers.get("content-type") ?? "image/jpeg";
+        const buffer = await res.arrayBuffer();
+        return new Response(buffer, {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=3600",
+          },
+        });
+      }
+
       default:
         return jsonResponse({ error: `Unknown action: ${action}` }, 400);
     }
