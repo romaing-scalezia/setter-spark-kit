@@ -13,6 +13,7 @@ import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import FollowUps from "./pages/FollowUps";
+import Inbox from "./pages/Inbox";
 import CoachPage, { CoachStudentPage } from "./pages/Coach";
 import Library from "./pages/Library";
 import PersonasPage from "./pages/Personas";
@@ -78,6 +79,7 @@ const App = () => (
             <Route path="/dashboard" element={<OnboardingGuard><AuthGuard><Dashboard /></AuthGuard></OnboardingGuard>} />
             <Route path="/leads" element={<OnboardingGuard><AuthGuard><Leads /></AuthGuard></OnboardingGuard>} />
             <Route path="/follow-ups" element={<OnboardingGuard><AuthGuard><FollowUps /></AuthGuard></OnboardingGuard>} />
+            <Route path="/inbox" element={<OnboardingGuard><AuthGuard><Inbox /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach/students/:id" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachStudentPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/leaderboard" element={<OnboardingGuard><AuthGuard><LeaderboardPage /></AuthGuard></OnboardingGuard>} />

@@ -1,67 +1,61 @@
-## Setter Responsible — MVP Plan
+# Plan — Page Inbox LinkedIn
 
-Goal: track who handled each lead when 2+ setters share a LinkedIn account, while staying **completely invisible for solo users**.
+## Garde de redirection
+Sur `/inbox`, on utilise `useUnipileAccount` :
+- `loading` → skeleton pleine page (header + 2 colonnes squelettes).
+- `account === null` → `useEffect` qui déclenche un toast "Connectez votre compte LinkedIn pour accéder à l'Inbox" puis `navigate('/settings', { replace: true })`.
+- `account !== null` → rendu normal de la page.
 
-### 1. Data model
+## Fichiers créés
 
-Add to `public.leads`:
-- `setter_id uuid NOT NULL DEFAULT auth.uid()` — who is actually doing the setting (distinct from `owner_id`, which stays as the lead's data owner for RLS).
+### 1. `src/hooks/useUnipileConversations.ts`
+React Query : `useQuery({ queryKey: ['unipile-conversations', account_id], enabled: !!account_id, queryFn: () => invoke('unipile-proxy', { body: { action: 'get_conversations', account_id }}) })`. Retourne `{ conversations, loading, refetch }`. Type `UnipileConversation` minimal : `id`, `name` (ou `attendee_name`), `last_message`, `timestamp`, `picture_url?`.
 
-Backfill: `UPDATE leads SET setter_id = owner_id`.
+### 2. `src/hooks/useUnipileMessages.ts`
+Idem avec `chat_id`, `enabled: !!chat_id`. Tri ascendant par timestamp côté hook. Type `UnipileMessage` : `id`, `text`, `timestamp`, `is_sender` (bool).
 
-New table `public.team_members` (lightweight "shared workspace"):
-- `team_id uuid` (we reuse `coach_id` as the team key — students of the same coach form one team; admins can also create ad-hoc teams later)
-- `user_id uuid`
-- unique(team_id, user_id)
+### 3. `src/pages/Inbox.tsx`
+Layout 2 colonnes dans `<AppLayout>` : `grid grid-cols-[360px_1fr]` (responsive : sur mobile, master/detail empilés ; out of scope MVP, focus desktop).
 
-For MVP we will **derive** the team from existing `coach_assignments`: two users belong to the same team if they share the same `coach_id`. No new table required → zero migration risk and matches the existing mental model. A new SQL helper `get_team_members(_user_id)` returns the user themselves + all co-students of their coach (if any).
+**Colonne gauche** — Liste :
+- Header "Inbox" + compteur.
+- `ScrollArea` avec items `ConversationListItem`. Chaque item : avatar (initiale), `name`, aperçu `last_message` (truncate), date relative (`date-fns formatDistanceToNow`). État sélectionné = `bg-muted`.
+- Skeletons pendant `loading`.
+- Empty state si vide.
 
-### 2. RLS
+**Colonne droite** — Détail :
+- Sans sélection : centered placeholder "Sélectionnez une conversation".
+- Avec sélection :
+  - Header : nom contact + badge/bouton "Lier à un lead" (cf. ci-dessous) à droite.
+  - Body scrollable : bulles messages. `is_sender` → aligné à droite, `bg-primary text-primary-foreground` ; sinon gauche, `bg-muted`. Heure sous la bulle.
+  - Footer fixe : `<Input>` + bouton `Envoyer`. `onSubmit` → invoke `send_message`, puis `setText('')` et `refetchMessages()`. État `sending` pour disable.
 
-- `leads` keeps existing RLS (owner / coach / admin). Setter does **not** grant cross-user access in MVP — to avoid leaking data, only `owner_id` controls visibility.
-- A coach can already see all leads of their students, so setter analytics for the team work through the coach.
-- When a normal user picks another setter, that setter must be in `get_team_members(auth.uid())`. Enforced by a trigger.
+### 4. `src/components/inbox/LinkLeadDialog.tsx`
+Dialog shadcn. Champ recherche (debounce 200ms). Requête : `supabase.from('leads').select('id, first_name, last_name').ilike via les patterns existants` (firstName+lastName, lastName+firstName). Liste cliquable max 10. Au clic : `update({ unipile_chat_id: conversation.id }).eq('id', lead.id)`, ferme, toast succès, invalide la query `linked-lead`.
 
-### 3. UI behavior (friction-free for solo users)
+### 5. Lien existant conversation ↔ lead
+Hook `useLinkedLead(chat_id)` : `supabase.from('leads').select('id, first_name, last_name').eq('unipile_chat_id', chat_id).maybeSingle()`.
+- Si présent : header affiche `<Link to={'/leads?focus=' + id}>Nom Prénom</Link>` (ou simplement `/leads`, le drawer lead n'a pas de route dédiée — à confirmer si on veut router).
+- Sinon : bouton "Lier à un lead" → ouvre `LinkLeadDialog`.
 
-Helper hook `useTeammates()`:
-- returns the list of co-setters from `get_team_members`.
-- if length ≤ 1 → user is solo → hide all setter UI.
+## Fichiers modifiés
 
-**Lead creation modal** (`CreateLeadModal`):
-- If solo → no field shown, `setter_id` defaults to current user server-side.
-- If teammates exist → small "Setter responsable" select, defaulted to current user.
+### `src/App.tsx`
+- Import `Inbox`.
+- Ajout `<Route path="/inbox" element={<OnboardingGuard><AuthGuard><Inbox /></AuthGuard></OnboardingGuard>} />` après `/follow-ups`.
 
-**Lead detail drawer** (`LeadDetailDrawer`):
-- If solo → no setter row.
-- If team → show "Setter: Name" with inline edit (owner / coach / admin only).
+### `src/components/AppSidebar.tsx`
+- Ajout d'un item `{ title: 'Inbox', url: '/inbox', icon: Inbox, roles: ['user', 'admin'] }` entre Follow-ups et Leaderboard. Import `Inbox` depuis `lucide-react` (renommer si collision avec la page : `import { Inbox as InboxIcon } from 'lucide-react'`).
 
-**CRM table** (`Leads.tsx`):
-- Setter column + "Setter" filter rendered only when `teammates.length > 1`.
+## Détails techniques
 
-**Dashboard** (`Dashboard.tsx`):
-- New "Performance par setter" card (conversations / responses / calls / RDV / rates) shown only when the current user has teammates *or* is a coach/admin viewing a student. Reuses existing KPI queries grouped by `setter_id`.
+- Tous les appels Unipile passent par `supabase.functions.invoke('unipile-proxy', ...)` — pas d'accès direct.
+- React Query `staleTime: 30s` pour conversations, `10s` pour messages. Pas de polling automatique au MVP (refetch manuel après envoi suffit).
+- La colonne `leads.unipile_chat_id` existe déjà (migration précédente). Cast `as any` n'est pas nécessaire si les types sont régénérés ; sinon on l'ajoute localement.
+- Format des réponses Unipile non figé : on type souplement (`any`) côté hooks et on fait des fallbacks (`item.name ?? item.attendee_name ?? '—'`, `item.last_message?.text ?? item.snippet`, etc.). À ajuster après premier test réel.
+- Aucune modification à `unipile-proxy/index.ts` (les actions `get_conversations`, `get_messages`, `send_message` existent déjà).
 
-### 4. Permissions summary
-
-| Role | Can change setter on a lead |
-|------|------------------------------|
-| Owner (solo) | n/a — auto |
-| Owner with teammates | yes, to any teammate |
-| Coach | yes, on their students' leads |
-| Admin | yes, everywhere |
-
-### 5. Files touched
-
-- Migration: add `setter_id`, backfill, `get_team_members` SQL function, trigger validating setter belongs to team.
-- `src/hooks/useTeammates.ts` (new)
-- `src/components/CreateLeadModal.tsx` — conditional setter select
-- `src/components/LeadDetailDrawer.tsx` — setter row + edit
-- `src/pages/Leads.tsx` — column + filter (conditional)
-- `src/pages/Dashboard.tsx` — per-setter breakdown card (conditional)
-- `src/components/SetterBreakdownCard.tsx` (new)
-
-### Out of scope (MVP)
-
-- Standalone `teams` table / invitations / shared workspaces UI.
-- Expanding RLS so teammates can read each other's leads (would require explicit team isolation table). Coaches remain the cross-user viewer.
+## Points à confirmer
+1. **Cible du lien lead** : `/leads?focus={id}` ou simplement `/leads` ? La page Leads ouvre un drawer via state local, pas une route — confirmer si ajouter un query-param de focus est OK.
+2. **Mobile** : MVP desktop-only acceptable ? (sinon ajouter master→detail navigation).
+3. **Champ nom dans la réponse Unipile** : confirmer après premier appel réel (on commence avec `name ?? attendee_name ?? subject`).
