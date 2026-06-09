@@ -15,6 +15,11 @@ interface CreateLeadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: { first_name: string; last_name: string; linkedin_url: string; persona_id: string | null; outreach_type: string | null; setter_id: string | null }) => Promise<void>;
+  initialValues?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    linkedin_url?: string | null;
+  };
 }
 
 const OUTREACH_OPTIONS = [
@@ -24,7 +29,7 @@ const OUTREACH_OPTIONS = [
   { value: 'autre', label: '📎 Autre', short: 'Autre' },
 ];
 
-export function CreateLeadModal({ open, onOpenChange, onSubmit }: CreateLeadModalProps) {
+export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }: CreateLeadModalProps) {
   const { user } = useAuth();
   const { teammates, isTeam } = useTeammates();
   const [firstName, setFirstName] = useState('');
@@ -38,6 +43,14 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit }: CreateLeadModa
   useEffect(() => {
     if (user?.id) setSetterId(user.id);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (open) {
+      setFirstName(initialValues?.first_name ?? '');
+      setLastName(initialValues?.last_name ?? '');
+      setLinkedinUrl(initialValues?.linkedin_url ?? '');
+    }
+  }, [open, initialValues?.first_name, initialValues?.last_name, initialValues?.linkedin_url]);
 
   const { data: myPersonas = [] } = useQuery({
     queryKey: ['create-lead-personas', user?.id],
