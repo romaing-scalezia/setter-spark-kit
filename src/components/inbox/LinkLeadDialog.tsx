@@ -22,10 +22,11 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   chatId: string;
+  linkedinUrl?: string | null;
   onLinked: () => void;
 }
 
-export function LinkLeadDialog({ open, onOpenChange, chatId, onLinked }: Props) {
+export function LinkLeadDialog({ open, onOpenChange, chatId, linkedinUrl, onLinked }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [query, setQuery] = useState('');
@@ -74,8 +75,10 @@ export function LinkLeadDialog({ open, onOpenChange, chatId, onLinked }: Props) 
 
   const link = async (leadId: string) => {
     setLinkingId(leadId);
+    const patch: Record<string, any> = { unipile_chat_id: chatId };
+    if (linkedinUrl) patch.linkedin_url = linkedinUrl;
     const { error } = await (supabase.from('leads') as any)
-      .update({ unipile_chat_id: chatId })
+      .update(patch)
       .eq('id', leadId);
     setLinkingId(null);
     if (error) {
