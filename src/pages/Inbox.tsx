@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Link2 } from 'lucide-react';
+import { Loader2, Send, Link2, CheckCheck } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +53,7 @@ function ConversationRow({
   onSelect: () => void;
 }) {
   const { name, avatarUrl } = useConversationDisplay(conversation);
+  const unread = Number((conversation.raw as any)?.unread_count ?? 0);
   return (
     <button
       onClick={onSelect}
@@ -74,9 +75,16 @@ function ConversationRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-sm font-medium">{name}</p>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
-            {formatTs(conversation.timestamp)}
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">
+              {formatTs(conversation.timestamp)}
+            </span>
+            {unread > 0 && (
+              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {unread}
+              </span>
+            )}
+          </div>
         </div>
         <p className="truncate text-xs text-muted-foreground">
           {conversation.last_message || '—'}
@@ -288,15 +296,24 @@ export default function Inbox() {
                           }`}
                         >
                           <p className="whitespace-pre-wrap break-words">{m.text}</p>
-                          <p
-                            className={`mt-1 text-[10px] ${
+                          <div
+                            className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
                               m.is_sender
                                 ? 'text-primary-foreground/70'
                                 : 'text-muted-foreground'
                             }`}
                           >
-                            {formatTs(m.timestamp)}
-                          </p>
+                            <span>{formatTs(m.timestamp)}</span>
+                            {m.is_sender && (
+                              <CheckCheck
+                                className={`h-3 w-3 ${
+                                  Number((m.raw as any)?.seen ?? 0) === 1
+                                    ? 'text-sky-300'
+                                    : 'text-primary-foreground/50'
+                                }`}
+                              />
+                            )}
+                          </div>
                         </div>
                       </li>
                     ))}
