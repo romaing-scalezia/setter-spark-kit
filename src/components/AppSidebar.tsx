@@ -30,10 +30,10 @@ import {
 
 const navItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, roles: ['user', 'admin'] },
+  { title: 'Inbox', url: '/inbox', icon: InboxIcon, roles: ['user', 'admin'] },
   { title: 'Supervision', url: '/coach', icon: Users, roles: ['coach'] },
   { title: 'CRM Leads', url: '/leads', icon: MessageSquare, roles: ['user', 'admin'] },
   { title: 'Follow-ups', url: '/follow-ups', icon: Clock, roles: ['user', 'admin'] },
-  { title: 'Inbox', url: '/inbox', icon: InboxIcon, roles: ['user', 'admin'] },
   { title: 'Leaderboard', url: '/leaderboard', icon: Trophy, roles: ['user', 'coach', 'admin'] },
   { title: 'Bibliothèque', url: '/library', icon: BookOpen, roles: ['user', 'coach', 'admin'] },
   { title: 'Personas', url: '/personas', icon: Target, roles: ['user', 'coach', 'admin'] },
