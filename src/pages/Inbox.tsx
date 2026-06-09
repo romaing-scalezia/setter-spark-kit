@@ -61,17 +61,7 @@ function ConversationRow({
         active ? 'bg-muted' : ''
       }`}
     >
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="h-9 w-9 shrink-0 rounded-full object-cover"
-        />
-      ) : (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-          {(name?.[0] ?? '?').toUpperCase()}
-        </div>
-      )}
+      <Avatar name={name} url={avatarUrl} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-sm font-medium">{name}</p>
@@ -97,6 +87,28 @@ function ConversationRow({
 function ConversationHeaderName({ conversation }: { conversation: UnipileConversation }) {
   const { name } = useConversationDisplay(conversation);
   return <p className="text-sm font-medium">{name}</p>;
+}
+
+function Avatar({ name, url }: { name: string; url: string | null }) {
+  const [hasError, setHasError] = useState(false);
+  const showImg = !!url && !hasError;
+  return (
+    <>
+      {showImg && (
+        <img
+          src={url!}
+          alt={name}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+          onError={() => setHasError(true)}
+        />
+      )}
+      {!showImg && (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+          {(name?.[0] ?? '?').toUpperCase()}
+        </div>
+      )}
+    </>
+  );
 }
 
 function formatTs(ts: string | null) {
