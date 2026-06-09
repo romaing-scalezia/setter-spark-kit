@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Linkedin } from 'lucide-react';
@@ -23,6 +23,30 @@ export function LinkedInIntegrationCard() {
   const { account, loading, refetch } = useUnipileAccount();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!account?.account_id) {
+      setDisplayName(null);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase.functions.invoke('unipile-proxy', {
+        body: { action: 'get_account', account_id: account.account_id },
+      });
+      if (cancelled) return;
+      if (error) {
+        setDisplayName(null);
+        return;
+      }
+      const d = data as any;
+      setDisplayName(d?.name ?? d?.display_name ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.account_id]);
 
   const handleConnect = async () => {
     setBusy(true);
@@ -91,7 +115,9 @@ export function LinkedInIntegrationCard() {
               <span className={`inline-block h-2.5 w-2.5 rounded-full ${statusColor}`} aria-hidden />
               <div className="space-y-0.5">
                 <p className="text-sm font-medium text-foreground">{statusLabel}</p>
-                <p className="text-xs text-muted-foreground font-mono">{account.account_id}</p>
+                <p className="text-xs text-muted-foreground">
+                  {displayName ?? account.account_id}
+                </p>
               </div>
             </div>
             <AlertDialog>
