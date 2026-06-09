@@ -234,6 +234,7 @@ export type Database = {
           setter_id: string
           source_type: Database["public"]["Enums"]["source_type_enum"] | null
           status: Database["public"]["Enums"]["lead_status"]
+          unipile_chat_id: string | null
           unqualified_at: string | null
           updated_at: string
         }
@@ -270,6 +271,7 @@ export type Database = {
           setter_id?: string
           source_type?: Database["public"]["Enums"]["source_type_enum"] | null
           status?: Database["public"]["Enums"]["lead_status"]
+          unipile_chat_id?: string | null
           unqualified_at?: string | null
           updated_at?: string
         }
@@ -306,6 +308,7 @@ export type Database = {
           setter_id?: string
           source_type?: Database["public"]["Enums"]["source_type_enum"] | null
           status?: Database["public"]["Enums"]["lead_status"]
+          unipile_chat_id?: string | null
           unqualified_at?: string | null
           updated_at?: string
         }
@@ -531,6 +534,41 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      unipile_accounts: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unipile_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_achievements: {
         Row: {
