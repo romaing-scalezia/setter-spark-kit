@@ -257,11 +257,10 @@ export default function Inbox() {
               </ul>
             )}
             {!convosLoading && hasMore && !loadingMore && (
-              <div className="p-3">
+              <div className="flex justify-center p-3">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full"
                   onClick={() => loadMore()}
                 >
                   Charger plus
