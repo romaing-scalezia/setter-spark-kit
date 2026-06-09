@@ -5,6 +5,7 @@ export interface AttendeeInfo {
   first_name?: string | null;
   last_name?: string | null;
   profile_picture_url?: string | null;
+  linkedin_url?: string | null;
 }
 
 type Status = 'loading' | 'loaded' | 'error';
@@ -30,6 +31,20 @@ function pickName(data: any): AttendeeInfo {
     data?.picture_url ??
     data?.profilePictureUrl ??
     null;
+  const publicId =
+    data?.public_identifier ??
+    data?.publicIdentifier ??
+    data?.profile?.public_identifier ??
+    null;
+  const explicitUrl =
+    data?.profile_url ??
+    data?.profileUrl ??
+    data?.public_profile_url ??
+    data?.publicProfileUrl ??
+    null;
+  const linkedin_url =
+    explicitUrl ??
+    (publicId ? `https://www.linkedin.com/in/${publicId}/` : null);
   // Fallback: split `name` if first/last absent
   if (!first && !last && typeof data?.name === 'string') {
     const parts = data.name.trim().split(/\s+/);
@@ -37,9 +52,10 @@ function pickName(data: any): AttendeeInfo {
       first_name: parts[0] ?? null,
       last_name: parts.slice(1).join(' ') || null,
       profile_picture_url: pic,
+      linkedin_url,
     };
   }
-  return { first_name: first, last_name: last, profile_picture_url: pic };
+  return { first_name: first, last_name: last, profile_picture_url: pic, linkedin_url };
 }
 
 async function fetchAttendee(attendeeId: string) {
@@ -76,6 +92,9 @@ function truncate(id: string) {
 export function useAttendeeName(attendeeId: string | null | undefined): {
   name: string;
   avatarUrl: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  linkedinUrl: string | null;
   loading: boolean;
 } {
   const [, setTick] = useState(0);
@@ -96,21 +115,28 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
   }, [attendeeId]);
 
   if (!attendeeId) {
-    return { name: '—', avatarUrl: null, loading: false };
+    return { name: '—', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: false };
   }
 
   const entry = cache.get(attendeeId);
   if (!entry || entry.status === 'loading') {
-    return { name: '…', avatarUrl: null, loading: true };
+    return { name: '…', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: true };
   }
   if (entry.status === 'error' || !entry.info) {
-    return { name: truncate(attendeeId), avatarUrl: null, loading: false };
+    return { name: truncate(attendeeId), avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: false };
   }
-  const { first_name, last_name, profile_picture_url } = entry.info;
+  const { first_name, last_name, profile_picture_url, linkedin_url } = entry.info;
   const name =
     [first_name, last_name].filter(Boolean).join(' ').trim() ||
     truncate(attendeeId);
-  return { name, avatarUrl: profile_picture_url ?? null, loading: false };
+  return {
+    name,
+    avatarUrl: profile_picture_url ?? null,
+    firstName: first_name ?? null,
+    lastName: last_name ?? null,
+    linkedinUrl: linkedin_url ?? null,
+    loading: false,
+  };
 }
 
 export function useAttendeeNamesPrefetch(ids: Array<string | null | undefined>) {
