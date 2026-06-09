@@ -102,9 +102,9 @@ serve(async (req) => {
 
     switch (action) {
       case "hosted_auth": {
-        const { notify_url } = body;
-        if (!notify_url) {
-          return jsonResponse({ error: "Missing 'notify_url'" }, 400);
+        const { notify_url, success_redirect_url, failure_redirect_url } = body;
+        if (!notify_url || !success_redirect_url) {
+          return jsonResponse({ error: "Missing 'notify_url' or 'success_redirect_url'" }, 400);
         }
         const expiresOn = new Date(Date.now() + 60 * 60 * 1000).toISOString();
         const payload = {
@@ -113,6 +113,8 @@ serve(async (req) => {
           api_url: UNIPILE_BASE_URL,
           expiresOn,
           notify_url,
+          success_redirect_url,
+          failure_redirect_url: failure_redirect_url ?? success_redirect_url,
           name: userId, // forced to Supabase user id (ignores client override)
         };
         return await unipileJson("/api/v1/hosted/accounts/link", {
