@@ -19,6 +19,8 @@ import {
 import { useUnipileMessages } from '@/hooks/useUnipileMessages';
 import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
 import { useAttendeeName } from '@/hooks/useAttendeeNames';
+import { CreateLeadModal } from '@/components/CreateLeadModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 function getAttendeeProviderId(c: UnipileConversation): string | null {
   const r = c.raw ?? {};
@@ -135,11 +137,13 @@ function useLinkedLead(chatId: string | null) {
 export default function Inbox() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const { account, loading: accountLoading } = useUnipileAccount();
   const [selected, setSelected] = useState<UnipileConversation | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Redirect guard
@@ -159,6 +163,13 @@ export default function Inbox() {
   const { messages, loading: msgsLoading, refetch: refetchMessages } =
     useUnipileMessages(selected?.id ?? null);
   const { data: linkedLead, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
+
+  const selectedAttendeeId = selected ? getAttendeeProviderId(selected) : null;
+  const {
+    firstName: attendeeFirstName,
+    lastName: attendeeLastName,
+    linkedinUrl: attendeeLinkedinUrl,
+  } = useAttendeeName(selectedAttendeeId);
 
   const sortedConvos = useMemo(
     () =>
@@ -268,14 +279,22 @@ export default function Inbox() {
                     {(linkedLead.first_name ?? '') + ' ' + (linkedLead.last_name ?? '')}
                   </Link>
                 ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setLinkOpen(true)}
-                  >
-                    <Link2 className="mr-2 h-3.5 w-3.5" />
-                    Lier à un lead
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setLinkOpen(true)}
+                    >
+                      <Link2 className="mr-2 h-3.5 w-3.5" />
+                      Lier à un lead
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      Créer un lead
+                    </Button>
+                  </div>
                 )}
               </header>
 
