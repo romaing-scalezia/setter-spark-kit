@@ -229,7 +229,7 @@ export default function Inbox() {
               {sortedConvos.length}
             </span>
           </div>
-          <ScrollArea className="flex-1">
+          <div className="min-w-0 flex-1 overflow-y-auto">
             {convosLoading ? (
               <div className="space-y-2 p-3">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -274,7 +274,7 @@ export default function Inbox() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </aside>
 
         {/* Right — Detail */}
