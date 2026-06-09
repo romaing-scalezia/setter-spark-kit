@@ -125,11 +125,14 @@ serve(async (req) => {
       }
 
       case "get_conversations": {
-        const { account_id } = body;
+        const { account_id, cursor } = body;
         if (!account_id) {
           return jsonResponse({ error: "Missing 'account_id'" }, 400);
         }
         const qs = new URLSearchParams({ account_id, limit: "50" });
+        if (cursor && typeof cursor === "string") {
+          qs.append("cursor", cursor);
+        }
         return await unipileJson(`/api/v1/chats?${qs.toString()}`, { method: "GET" }, apiKey);
       }
 
