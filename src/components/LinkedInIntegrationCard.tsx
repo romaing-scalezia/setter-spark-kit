@@ -27,9 +27,13 @@ export function LinkedInIntegrationCard() {
   const handleConnect = async () => {
     setBusy(true);
     try {
-      const notifyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/unipile-webhook`;
       const { data, error } = await supabase.functions.invoke('unipile-proxy', {
-        body: { action: 'hosted_auth', notify_url: notifyUrl },
+        body: {
+          action: 'hosted_auth',
+          notify_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/unipile-webhook`,
+          success_redirect_url: `${window.location.origin}/settings`,
+          failure_redirect_url: `${window.location.origin}/settings`,
+        },
       });
       if (error) throw error;
       const url = (data as any)?.url;
