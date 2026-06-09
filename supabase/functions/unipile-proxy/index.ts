@@ -133,6 +133,18 @@ serve(async (req) => {
         return await unipileJson(`/api/v1/chats?${qs.toString()}`, { method: "GET" }, apiKey);
       }
 
+      case "get_account": {
+        const { account_id } = body;
+        if (!account_id) {
+          return jsonResponse({ error: "Missing 'account_id'" }, 400);
+        }
+        return await unipileJson(
+          `/api/v1/accounts/${encodeURIComponent(account_id)}`,
+          { method: "GET" },
+          apiKey,
+        );
+      }
+
       case "get_messages": {
         const { chat_id } = body;
         if (!chat_id) {
