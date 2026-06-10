@@ -27,6 +27,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
     if (!supabaseUrl || !serviceRoleKey) {
       console.error("[unipile-webhook] Missing env vars");
       return jsonResponse({ received: true, error: "config" }, 200);

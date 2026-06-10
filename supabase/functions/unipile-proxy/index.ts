@@ -81,11 +81,14 @@ serve(async (req) => {
     }
     const token = authHeader.replace(/^Bearer\s+/i, "");
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") 
+  ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").public;
+
+  const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  anonKey!,
+  { global: { headers: { Authorization: authHeader } } },
+  );
 
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData?.user) {
