@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SetterFlow — Design System (Atlas)</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,800,900&display=swap" rel="stylesheet" />
+<link href="setterflow-ds.css" rel="stylesheet" />
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{font-family:var(--sf-font);background:var(--sf-bg);color:var(--sf-text);-webkit-font-smoothing:antialiased;line-height:1.5;}
+  .ico{width:18px;height:18px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .ico.sm{width:15px;height:15px;}.ico.xs{width:13px;height:13px;stroke-width:1.9;}
+
+  /* layout */
+  .head{padding:48px 56px 28px;border-bottom:1px solid var(--sf-border);background:var(--sf-surface);}
+  .head .lockup{display:flex;align-items:center;gap:13px;margin-bottom:20px;}
+  .head .mk{width:44px;height:44px;border-radius:12px;background:var(--sf-accent);display:grid;place-items:center;}
+  .head .wm{font-size:30px;font-weight:700;letter-spacing:var(--sf-tracking-tight);}
+  .head .wm .s{color:var(--sf-accent);}.head .wm .d{color:var(--sf-accent);}
+  .head h1{font-size:38px;font-weight:800;letter-spacing:var(--sf-tracking-tight);margin:0 0 8px;}
+  .head p{font-size:16px;color:var(--sf-text-2);max-width:620px;margin:0;}
+  .wrap{padding:40px 56px 90px;display:flex;flex-direction:column;gap:46px;max-width:1180px;}
+  section h2{font-size:13px;font-weight:700;letter-spacing:var(--sf-tracking-label);text-transform:uppercase;color:var(--sf-text-3);margin:0 0 20px;padding-bottom:10px;border-bottom:1px solid var(--sf-border);}
+  .grid{display:grid;gap:14px;}
+  .card{background:var(--sf-surface);border:1px solid var(--sf-border);border-radius:var(--sf-radius-lg);padding:20px;box-shadow:var(--sf-shadow-sm);}
+  .lbl{font-size:var(--sf-text-micro);font-weight:700;letter-spacing:var(--sf-tracking-label);text-transform:uppercase;color:var(--sf-text-3);}
+
+  /* type */
+  .type-row{display:flex;align-items:baseline;gap:18px;padding:13px 0;border-bottom:1px solid var(--sf-border);}
+  .type-row:last-child{border-bottom:none;}
+  .type-row .meta{width:190px;flex:0 0 190px;font-size:12.5px;color:var(--sf-text-3);font-variant-numeric:tabular-nums;}
+
+  /* colors */
+  .sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;}
+  .sw{border:1px solid var(--sf-border);border-radius:var(--sf-radius);overflow:hidden;background:var(--sf-surface);}
+  .sw .chip{height:64px;}
+  .sw .meta{padding:9px 11px;}
+  .sw .nm{font-size:12.5px;font-weight:600;}
+  .sw .hex{font-size:11.5px;color:var(--sf-text-3);font-family:ui-monospace,monospace;}
+
+  /* spacing */
+  .space-row{display:flex;align-items:center;gap:14px;margin-bottom:9px;}
+  .space-row .bar{height:16px;background:var(--sf-accent-weak);border:1px solid var(--sf-accent-line);border-radius:4px;}
+  .space-row .t{font-size:12.5px;color:var(--sf-text-2);font-variant-numeric:tabular-nums;}
+  .radius-demo{display:flex;gap:16px;flex-wrap:wrap;}
+  .radius-demo .b{width:84px;height:64px;background:var(--sf-surface-2);border:1px solid var(--sf-border-strong);display:grid;place-items:end center;padding-bottom:7px;font-size:11.5px;color:var(--sf-text-3);}
+  .shadow-demo{display:flex;gap:22px;flex-wrap:wrap;}
+  .shadow-demo .b{width:120px;height:78px;background:var(--sf-surface);border-radius:var(--sf-radius-lg);display:grid;place-items:center;font-size:12px;color:var(--sf-text-3);}
+
+  /* components */
+  .comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .comp-card{background:var(--sf-surface);border:1px solid var(--sf-border);border-radius:var(--sf-radius-lg);padding:18px;box-shadow:var(--sf-shadow-sm);}
+  .comp-card .t{font-size:13px;font-weight:700;margin-bottom:14px;}
+  .demo{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+
+  /* primitives copied from product */
+  .btn{display:inline-flex;align-items:center;gap:7px;font-family:inherit;font-size:13.5px;font-weight:600;border-radius:var(--sf-radius);padding:8px 13px;border:1px solid var(--sf-border);background:var(--sf-surface);color:var(--sf-text);cursor:pointer;}
+  .btn:hover{background:var(--sf-surface-2);}
+  .btn.primary{background:var(--sf-accent);border-color:var(--sf-accent);color:var(--sf-on-accent);box-shadow:var(--sf-shadow-sm);}
+  .btn.primary:hover{background:var(--sf-accent-hover);}
+  .btn.sm{padding:6px 10px;font-size:13px;}
+  .icon-btn{width:36px;height:36px;display:grid;place-items:center;border-radius:var(--sf-radius);border:1px solid var(--sf-border);background:var(--sf-surface);color:var(--sf-text-2);cursor:pointer;}
+  .icon-btn:hover{background:var(--sf-surface-2);color:var(--sf-text);}
+  .chip{font-size:12.5px;font-weight:500;border:1px solid var(--sf-border);background:var(--sf-surface);color:var(--sf-text-2);padding:5px 11px;border-radius:var(--sf-radius-pill);display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+  .chip.on{background:var(--sf-text);color:var(--sf-surface);border-color:var(--sf-text);font-weight:600;}
+  .lead-chip{font-size:12px;font-weight:600;padding:2px 9px;border-radius:var(--sf-radius-pill);display:inline-flex;align-items:center;gap:5px;}
+  .lead-chip.hot{color:var(--sf-hot);background:var(--sf-hot-weak);}
+  .lead-chip.warm{color:var(--sf-warm);background:var(--sf-warm-weak);}
+  .lead-chip.good{color:var(--sf-good);background:var(--sf-good-weak);}
+  .lead-chip.acc{color:var(--sf-accent);background:var(--sf-accent-weak);}
+  .lead-chip.score{color:var(--sf-text-2);background:var(--sf-surface-2);border:1px solid var(--sf-border);font-variant-numeric:tabular-nums;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:11px;color:var(--sf-text-3);font-weight:600;}
+  .input{font-family:inherit;font-size:13.5px;border:1px solid var(--sf-border-strong);border-radius:var(--sf-radius);padding:8px 11px;background:var(--sf-surface);color:var(--sf-text);outline:none;width:100%;}
+  .input:focus{border-color:var(--sf-accent);box-shadow:0 0 0 3px var(--sf-accent-weak);}
+  .avatar{border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;font-size:13px;}
+  .temp-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .bubble{padding:10px 13px;border-radius:var(--sf-radius-lg);font-size:14px;max-width:75%;}
+  .bubble.in{background:var(--sf-surface-2);border:1px solid var(--sf-border);border-top-left-radius:5px;}
+  .bubble.out{background:var(--sf-accent);color:#fff;border-top-right-radius:5px;align-self:flex-end;}
+  table.t{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.t th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:var(--sf-tracking-label);color:var(--sf-text-3);font-weight:700;padding:9px 10px;border-bottom:1px solid var(--sf-border);}
+  table.t td{padding:11px 10px;border-bottom:1px solid var(--sf-border);}
+  .navitem{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:var(--sf-radius);color:var(--sf-text-2);font-weight:500;font-size:14px;border:1px solid transparent;cursor:pointer;}
+  .navitem:hover{background:var(--sf-surface-2);color:var(--sf-text);}
+  .navitem.on{background:var(--sf-surface);color:var(--sf-text);border-color:var(--sf-border);box-shadow:var(--sf-shadow-sm);font-weight:600;}
+  .navitem.on .ico{color:var(--sf-accent);}
+</style>
+</head>
+<body>
+<div class="head">
+  <div class="lockup">
+    <span class="mk"><svg width="26" height="26" viewBox="0 0 48 48" fill="none"><path d="M32.5 13.5C32.5 9.5 16 9 16 16.8C16 22.6 32 22.9 32 30C32 37.8 16 37.8 16 33.4" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/><circle cx="32.5" cy="13.5" r="4" fill="#fff"/><circle cx="24" cy="23.6" r="4" fill="#fff"/><circle cx="16" cy="33.4" r="4.6" fill="#fff"/></svg></span>
+    <span class="wm"><span class="s">Setter</span>Flow<span class="d">.</span></span>
+  </div>
+  <h1>Design System — Atlas</h1>
+  <p>La source de vérité visuelle de SetterFlow. Sobre, précise, froide ; un seul accent (iris). Tous les écrans référencent les tokens de <code>setterflow-ds.css</code>.</p>
+</div>
+
+<div class="wrap">
+  <!-- TYPE -->
+  <section>
+    <h2>Typographie — Satoshi</h2>
+    <div class="card">
+      <div class="type-row"><span class="meta">Display · 32 / 800</span><span style="font-size:32px;font-weight:800;letter-spacing:-.02em;">Piloter son setting</span></div>
+      <div class="type-row"><span class="meta">H1 · 21 / 700</span><span style="font-size:21px;font-weight:700;letter-spacing:-.01em;">Titre de page</span></div>
+      <div class="type-row"><span class="meta">H2 · 16 / 700</span><span style="font-size:16px;font-weight:700;">Titre de section</span></div>
+      <div class="type-row"><span class="meta">H3 · 14 / 700</span><span style="font-size:14px;font-weight:700;">Libellé fort</span></div>
+      <div class="type-row"><span class="meta">Corps · 14 / 400</span><span style="font-size:14px;">Le texte courant de l'interface, lisible et neutre.</span></div>
+      <div class="type-row"><span class="meta">Small · 13 · text-2</span><span style="font-size:13px;color:var(--sf-text-2);">Texte secondaire, descriptions.</span></div>
+      <div class="type-row"><span class="meta">Méta · 12 · text-3</span><span style="font-size:12px;color:var(--sf-text-3);">Horodatage, compteurs, méta.</span></div>
+      <div class="type-row"><span class="meta">Label · 11 / 700 · caps</span><span class="lbl">Label de section</span></div>
+    </div>
+  </section>
+
+  <!-- COLORS -->
+  <section>
+    <h2>Couleurs</h2>
+    <div class="lbl" style="margin-bottom:10px;">Accent (iris) &amp; neutres</div>
+    <div class="sw-grid" id="sw-base"></div>
+    <div class="lbl" style="margin:22px 0 10px;">Sémantique — température &amp; statuts</div>
+    <div class="sw-grid" id="sw-sem"></div>
+  </section>
+
+  <!-- SPACING / RADIUS / SHADOW -->
+  <section>
+    <h2>Espacements · Rayons · Ombres</h2>
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card">
+        <div class="lbl" style="margin-bottom:14px;">Échelle d'espacement (4px)</div>
+        <div id="space-list"></div>
+      </div>
+      <div class="card">
+        <div class="lbl" style="margin-bottom:14px;">Rayons</div>
+        <div class="radius-demo">
+          <div class="b" style="border-radius:var(--sf-radius-sm);">sm · 7</div>
+          <div class="b" style="border-radius:var(--sf-radius);">base · 9</div>
+          <div class="b" style="border-radius:var(--sf-radius-lg);">lg · 13</div>
+          <div class="b" style="border-radius:var(--sf-radius-pill);width:64px;">pill</div>
+        </div>
+        <div class="lbl" style="margin:22px 0 14px;">Ombres</div>
+        <div class="shadow-demo">
+          <div class="b" style="box-shadow:var(--sf-shadow-sm);border:1px solid var(--sf-border);">sm</div>
+          <div class="b" style="box-shadow:var(--sf-shadow);">base</div>
+          <div class="b" style="box-shadow:var(--sf-shadow-lg);">lg</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPONENTS -->
+  <section>
+    <h2>Composants</h2>
+    <div class="comp-grid">
+      <div class="comp-card"><div class="t">Boutons</div><div class="demo">
+        <button class="btn primary"><svg class="ico sm" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>Booker un RDV</button>
+        <button class="btn">Statut</button>
+        <button class="btn sm">Action</button>
+        <button class="icon-btn"><svg class="ico sm" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg></button>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Chips &amp; filtres</div><div class="demo">
+        <span class="chip on">Tous</span><span class="chip">Non lus</span><span class="chip">🔥 Chauds</span><span class="chip">À relancer</span>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Lead chips (statut / score)</div><div class="demo">
+        <span class="lead-chip hot">🔥 Chaud</span><span class="lead-chip warm">Tiède</span><span class="lead-chip good">RDV booké</span><span class="lead-chip acc">Engagée</span><span class="lead-chip score">Score 82</span>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Avatars &amp; température</div><div class="demo">
+        <span class="avatar" style="width:40px;height:40px;background:var(--sf-av-1);">CM</span>
+        <span class="avatar" style="width:34px;height:34px;background:var(--sf-av-2);">MA</span>
+        <span class="avatar" style="width:28px;height:28px;background:var(--sf-av-3);font-size:11px;">JR</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sf-text-2);"><span class="temp-dot" style="background:var(--sf-hot);"></span>chaud</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sf-text-2);"><span class="temp-dot" style="background:var(--sf-warm);"></span>tiède</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--sf-text-2);"><span class="temp-dot" style="background:var(--sf-cold);"></span>froid</span>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Champs</div><div class="demo" style="gap:14px;">
+        <div class="field" style="flex:1;"><label>Nom complet</label><input class="input" value="Camille Mérigon"/></div>
+        <div class="field" style="flex:1;"><label>Statut</label><select class="input"><option>Conversation engagée</option><option>RDV booké</option></select></div>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Bulles de message</div><div class="demo" style="flex-direction:column;align-items:stretch;">
+        <div class="bubble in">Tu pars quelque part pour les vacances ??</div>
+        <div class="bubble out">content pour toi, ça s'active fort !</div>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Item de navigation</div><div class="demo" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div class="navitem on"><svg class="ico sm" viewBox="0 0 24 24"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>Inbox</div>
+        <div class="navitem"><svg class="ico sm" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Leads</div>
+      </div></div>
+
+      <div class="comp-card"><div class="t">Tableau</div>
+        <table class="t"><thead><tr><th>Nom</th><th>Statut</th><th>Score</th></tr></thead><tbody>
+          <tr><td style="font-weight:600;">Nassim A.</td><td><span class="lead-chip good">RDV booké</span></td><td style="font-weight:700;">95</td></tr>
+          <tr><td style="font-weight:600;">Mahé A.</td><td><span class="lead-chip acc">En cours</span></td><td style="font-weight:700;">50</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGO -->
+  <section>
+    <h2>Logo</h2>
+    <div class="card demo" style="gap:22px;">
+      <div style="display:flex;align-items:center;gap:11px;"><span class="mk" style="width:34px;height:34px;border-radius:10px;background:var(--sf-accent);display:grid;place-items:center;"><svg width="21" height="21" viewBox="0 0 48 48" fill="none"><path d="M32.5 13.5C32.5 9.5 16 9 16 16.8C16 22.6 32 22.9 32 30C32 37.8 16 37.8 16 33.4" stroke="#fff" stroke-width="3.4" stroke-linecap="round" fill="none"/><circle cx="32.5" cy="13.5" r="4" fill="#fff"/><circle cx="24" cy="23.6" r="4" fill="#fff"/><circle cx="16" cy="33.4" r="4.6" fill="#fff"/></svg></span><span style="font-size:20px;font-weight:700;letter-spacing:-.02em;"><span style="color:var(--sf-accent);">Setter</span>Flow<span style="color:var(--sf-accent);">.</span></span></div>
+      <div style="width:1px;height:38px;background:var(--sf-border);"></div>
+      <span class="lbl">Wordmark : « Setter » + point en iris · symbole « pipeline en S »</span>
+    </div>
+  </section>
+</div>
+
+<script>
+const base=[['Accent','--sf-accent','#5851E8'],['Accent hover','--sf-accent-hover','#4A43DA'],['Accent weak','--sf-accent-weak','#EDECFD'],['Text','--sf-text','#15161A'],['Text 2','--sf-text-2','#5C606A'],['Text 3','--sf-text-3','#9A9EA8'],['BG','--sf-bg','#FAFAFB'],['Surface','--sf-surface','#FFFFFF'],['Surface 2','--sf-surface-2','#F5F5F7'],['Surface 3','--sf-surface-3','#EFEFF2'],['Border','--sf-border','#EAEAEE'],['Border strong','--sf-border-strong','#DCDCE2']];
+const sem=[['Hot','--sf-hot','#E5484D'],['Hot weak','--sf-hot-weak','#FCEBEC'],['Warm','--sf-warm','#D6890C'],['Warm weak','--sf-warm-weak','#FBF1DD'],['Good','--sf-good','#2F9E66'],['Good weak','--sf-good-weak','#E4F4EC'],['Cold','--sf-cold','#9A9EA8']];
+const swHtml=(arr)=>arr.map(([n,v,h])=>`<div class="sw"><div class="chip" style="background:var(${v});${h.toUpperCase()==='#FFFFFF'?'border-bottom:1px solid var(--sf-border);':''}"></div><div class="meta"><div class="nm">${n}</div><div class="hex">${h}</div></div></div>`).join('');
+document.getElementById('sw-base').innerHTML=swHtml(base);
+document.getElementById('sw-sem').innerHTML=swHtml(sem);
+const spaces=[['1',4],['2',8],['3',12],['4',16],['5',20],['6',24],['8',32],['10',40]];
+document.getElementById('space-list').innerHTML=spaces.map(([n,px])=>`<div class="space-row"><div class="bar" style="width:${px}px;"></div><span class="t">space-${n} · ${px}px</span></div>`).join('');
+</script>
+</body>
+</html>

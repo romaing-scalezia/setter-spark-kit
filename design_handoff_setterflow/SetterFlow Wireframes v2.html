@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SetterFlow — Wireframes v2</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,800&display=swap" rel="stylesheet" />
+<link href="wire.css" rel="stylesheet" />
+</head>
+<body>
+<div class="ctrl">
+  <div class="brand"><span class="m"></span>SetterFlow<span class="tag">wireframes v2 · Atlas</span></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="legend"><span class="sw"></span>accent = action / attention</div>
+</div>
+<div class="stage" id="stage"></div>
+
+<script>
+const ph=(w,h=11)=>`<span class="ph" style="width:${w};height:${h}px"></span>`;
+const phd=(w,h=11)=>`<span class="ph dk" style="width:${w};height:${h}px"></span>`;
+const phl=(arr,h=9)=>`<div class="col g6">${arr.map(w=>ph(w,h)).join('')}</div>`;
+const av=(t,s=34)=>`<span class="avatar" style="width:${s}px;height:${s}px">${t}</span>`;
+
+/* ---------- nav / shell ---------- */
+const NAV_MAIN=[['Dashboard','dash'],['Inbox','inbox',{badge:'12'}],['Leads','leads'],['Follow-ups','followups',{soft:'3'}]];
+const NAV_RES=[['Ressources','ressources'],['Leaderboard','leaderboard']];
+function nitems(list,active){
+  return list.map(([n,k,o])=>`<div class="nitem ${k===active?'on':''}" data-go="${k}">
+    <span class="nico"></span><span>${n}</span>
+    ${o&&o.badge?`<span class="nb">${o.badge}</span>`:''}
+    ${o&&o.soft?`<span class="nb soft">${o.soft}</span>`:''}
+  </div>`).join('');
+}
+function shell(active,content){
+  return `<div class="app">
+    <nav class="nav">
+      <div class="logo"><span class="m"></span>SetterFlow</div>
+      ${nitems(NAV_MAIN,active)}
+      <div class="grp-label">Ressources &amp; équipe</div>
+      ${nitems(NAV_RES,active)}
+      <div class="foot">
+        <div class="subcard">
+          <div class="st">Plan Free</div>
+          <div class="sd">3 leads/mois · 1 compte LinkedIn connecté</div>
+          <span class="sbtn" data-go="settings">Passer en Pro →</span>
+        </div>
+        <div class="nitem ${active==='settings'?'on':''}" data-go="settings"><span class="nico"></span><span>Paramètres</span></div>
+        <div class="userrow">${av('RG',30)}<div><div class="un">Romain Goupille</div><div class="ue">romain@scalezia.co</div></div></div>
+      </div>
+    </nav>
+    <div class="main">${content}</div>
+  </div>`;
+}
+const topbar=(left,right='')=>`<div class="topbar">${left}<div class="who">${right}${av('RG',26)}</div></div>`;
+
+/* ============ PLAN / IA ============ */
+function planHtml(){
+  const before=['Dashboard','Inbox','CRM Leads','Follow-ups','Leaderboard','Bibliothèque','Personas','Workspace','Abonnement','Paramètres'];
+  return `<div class="plan">
+    <div class="cards">
+      <div class="box pad col g14">
+        <div class="row" style="justify-content:space-between;"><h2 class="h2">Avant</h2><span class="t3">10 entrées à plat</span></div>
+        <div class="maplist">
+          ${before.map(n=>{
+            const merged=['Workspace','Abonnement','Personas'].includes(n);
+            return `<div class="mapitem ${merged?'merged':''}"><span class="mi"></span>${n}</div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="box pad col g14">
+        <div class="row" style="justify-content:space-between;"><h2 class="h2">Après <span class="t3" style="font-weight:500;">— proposition</span></h2><span class="t3">6 entrées + Paramètres</span></div>
+        <div class="maplist">
+          <div class="mapitem"><span class="mi"></span>Dashboard <span class="t3" style="margin-left:auto;">absorbe le résumé « Actions du jour »</span></div>
+          <div class="mapitem"><span class="mi"></span>Inbox</div>
+          <div class="mapitem"><span class="mi"></span>Leads <span class="t3" style="margin-left:auto;">(ex-CRM Leads)</span></div>
+          <div class="mapitem"><span class="mi"></span>Follow-ups</div>
+          <div class="grp-label" style="padding:8px 2px 2px;">Ressources &amp; équipe</div>
+          <div class="mapitem grpd"><span class="mi"></span>Ressources <span class="tagm">onglets</span></div>
+          <div class="subnest">
+            <div class="mapitem"><span class="mi"></span>Scripts &amp; templates <span class="t3" style="margin-left:auto;">(ex-Bibliothèque)</span></div>
+            <div class="mapitem"><span class="mi"></span>Personas / Cibles</div>
+          </div>
+          <div class="mapitem grpd"><span class="mi"></span>Leaderboard <span class="t3" style="margin-left:auto;">vue équipe pour les agences</span></div>
+          <div class="grp-label" style="padding:8px 2px 2px;">En pied de sidebar</div>
+          <div class="mapitem grpd"><span class="mi"></span>Paramètres <span class="tagm">onglets</span></div>
+          <div class="subnest">
+            <div class="mapitem"><span class="mi"></span>Profil</div>
+            <div class="mapitem"><span class="mi"></span>Intégration LinkedIn</div>
+            <div class="mapitem"><span class="mi"></span>Espace de travail <span class="t3" style="margin-left:auto;">(ex-Workspace)</span></div>
+            <div class="mapitem"><span class="mi"></span>Facturation <span class="t3" style="margin-left:auto;">(ex-Abonnement)</span></div>
+          </div>
+          <div class="mapitem grpd"><span class="mi"></span>Carte « Plan Free → Pro » <span class="tagm">sidebar · non-abonnés</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="box pad col g12" style="margin-top:18px;">
+      <h3 class="h3">Ce qui change &amp; pourquoi</h3>
+      <div class="legend-merge">
+        <div class="lm"><span class="k">Workspace → Paramètres › Espace de travail.</span> <span class="t2">La gestion d'équipe (membres, rôles) est de la config, pas un espace de travail quotidien.</span></div>
+        <div class="lm"><span class="k">Abonnement → carte sidebar + Paramètres › Facturation.</span> <span class="t2">La carte n'apparaît que pour les comptes Free (incitation), et les détails vivent dans Paramètres.</span></div>
+        <div class="lm"><span class="k">Bibliothèque + Personas → « Ressources » (onglets).</span> <span class="t2">Ce sont deux bibliothèques d'actifs réutilisables pour l'outreach — elles vont bien ensemble. <i>Alternative possible : Personas dans Paramètres, comme tu le suggérais — dis-moi.</i></span></div>
+        <div class="lm"><span class="k">Leaderboard contextuel.</span> <span class="t2">Masqué pour un setter solo ; devient une vue « Équipe » (classement + membres) pour les agences.</span></div>
+        <div class="lm"><span class="k">Follow-ups conservé.</span> <span class="t2">C'est le moteur quotidien des relances. Son résumé apparaît aussi sur le Dashboard.</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============ DASHBOARD ============ */
+function dashPage(){
+  const kpi=(t,v)=>`<div class="box pad col g8 kpi"><div class="row" style="justify-content:space-between;"><span class="t3">${t}</span>${phd('20px',20)}</div><span class="v">${v}</span></div>`;
+  const mini=(t)=>`<div class="box pad12 row g10" style="flex:1;"><span class="chip warm">Medium</span><div class="col g6" style="flex:1;"><span class="h3" style="font-size:13px;">${t}</span>${ph('60%',8)}</div></div>`;
+  const content=topbar('<div class="col g6"><h1 class="h1">Bonjour, Romain 👋</h1><span class="t3">Cette semaine · 08 → 14 juin</span></div>','<span class="btn pri">+ Nouveau lead</span>')+
+  `<div class="content">
+    <div class="box pad row g16" style="align-items:center;">
+      <span class="avatar" style="width:58px;height:58px;border:3px solid var(--accent);background:var(--paper);color:var(--accent);font-size:20px;">16</span>
+      <div class="col g8" style="flex:1;"><div class="row" style="justify-content:space-between;"><span class="h3">🔥 Série de 1 jour — continue !</span><span class="chip acc">Niv. 1 — Débutant</span></div>
+        <div class="ph" style="width:100%;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--accent) 64%,var(--fill2) 64%);"></div>
+        <span class="t3">Setting Score 16 · plus que 9 pts pour le niveau 2</span></div>
+    </div>
+    <div class="box pad col g14" style="border-color:var(--accent-line);">
+      <div class="row" style="justify-content:space-between;"><h2 class="h2">Ta prochaine action</h2><span class="chip">3 en attente</span></div>
+      <div class="row g14">${av('CM',46)}<div class="col g6" style="flex:1;"><span class="h3" style="font-size:15px;">Proposer un créneau à Camille Mérigon</span><span class="t3">A répondu il y a 29 min · 🔥 Chaud · score 82</span></div>
+        <span class="btn pri">Ouvrir la conversation</span><span class="btn gh">Plus tard</span></div>
+      <hr class="divh"/>
+      <div class="row g12">${mini('Relancer Antonin Goisque')}${mini('Relancer un lead supprimé')}</div>
+    </div>
+    <div class="row g14">${kpi('Conversations','3')}${kpi('Réponses','2')}${kpi('Appels proposés','1')}${kpi('RDV bookés','1')}</div>
+    <div class="row g14" style="align-items:stretch;">
+      <div class="box pad col g12" style="flex:2;"><h3 class="h3">Taux de conversion</h3>
+        <div class="row g10">${[['67%','Réponse'],['50%','Appel'],['100%','Booking'],['33%','Global']].map(([v,l])=>`<div class="col g6" style="flex:1;align-items:center;"><span style="font-size:20px;font-weight:800;color:var(--accent);">${v}</span><span class="t3">${l}</span></div>`).join('')}</div></div>
+      <div class="box pad col g10" style="flex:1;"><div class="row" style="justify-content:space-between;"><h3 class="h3">Chiffre d'affaires</h3><span class="btn sm">+ Deal</span></div>
+        <div class="row g16"><div class="col"><span class="v">0€</span><span class="t3">CA total</span></div><div class="col"><span class="v">0</span><span class="t3">Clients</span></div></div></div>
+    </div>
+  </div>`;
+  return shell('dash',content);
+}
+
+/* ============ INBOX ============ */
+function inboxPage(){
+  const conv=(i,n,p,t,temp,sel,unread)=>`<div class="row g10" style="padding:10px 12px;border-radius:9px;${sel?'background:var(--accent-weak);':''}cursor:pointer;align-items:flex-start;">
+    ${av(i,38)}<div class="col g6" style="flex:1;min-width:0;"><div class="row" style="justify-content:space-between;gap:8px;"><span class="h3" style="font-size:13.5px;display:flex;align-items:center;gap:6px;"><span class="dot ${temp}"></span>${n}</span><span class="t3" style="flex:0 0 auto;">${t}</span></div><span class="t3" style="${unread?'color:var(--ink);font-weight:600;':''}">${p}</span></div>
+    ${unread?'<span class="nb" style="margin:0;">1</span>':''}</div>`;
+  const list=`<div class="col" style="flex:0 0 318px;border-right:1px solid var(--line);min-width:0;">
+    <div class="col g10" style="padding:16px;border-bottom:1px solid var(--line2);">
+      <div class="row" style="justify-content:space-between;"><h1 class="h1" style="font-size:19px;">Inbox</h1><span class="chip">50</span></div>
+      <div class="search"><span class="gl"></span>Rechercher…</div>
+      <div class="row g6 wrap"><span class="chip on">Tous</span><span class="chip">Non lus</span><span class="chip">🔥 Chauds</span><span class="chip">À relancer</span></div>
+    </div>
+    <div class="col" style="padding:6px;">
+      ${conv('CM','Camille Mérigon','Tu pars quelque part… ?','29 min','hot',true)}
+      ${conv('MB','Mary Bornaghi','Carrément, on cale ça…','22 h','warm')}
+      ${conv('MA','Mahé Aberlin','Vous : Je te partage…','1 j','hot')}
+      ${conv('AG','Antonin Goisque','Ah pas mal ton approche…','6 j','warm',false,true)}
+      ${conv('NA','Nassim Aberkane','Parfait, je bloque jeudi','5 j','hot')}
+      ${conv('JR','Julie Rosier','Vous : Hello Julie !','5 j','cold')}
+    </div></div>`;
+  const thread=`<div class="col" style="flex:1;min-width:0;">
+    <div class="row g12" style="padding:13px 20px;border-bottom:1px solid var(--line2);">
+      ${av('CM',42)}<div class="col g6"><span class="h2">Camille Mérigon 🌴</span><div class="row g6"><span class="chip hot">🔥 Chaud</span><span class="chip">Score 82</span><span class="chip acc">Engagée</span></div></div>
+      <div class="row g8" style="margin-left:auto;"><span class="btn pri sm">📅 Booker un RDV</span><span class="btn sm">Statut ▾</span><span class="btn sm">Profil ▸</span></div>
+    </div>
+    <div class="thread-mini" style="flex:1;padding:20px;">
+      <div class="bub out">tu as fais des propales à tous en mode full présentiel ?</div>
+      <div class="bub in">Kold Lanta visio + présentiel (Paris &amp; Bdx). Présentiel fin février :)</div>
+      <div class="bub in">Tu pars quelque part pour les vacances ??</div>
+      <div class="bub out">c'est royal ça après un an de lancement, content pour toi !</div>
+    </div>
+    <div class="col g8" style="padding:13px 20px;border-top:1px solid var(--line2);">
+      <div class="row g6 wrap"><span class="t3" style="text-transform:uppercase;letter-spacing:.06em;">✦ Suggestions</span><span class="chip acc">📅 Proposer un créneau jeudi</span><span class="chip acc">Répondre chaleureusement</span><span class="chip acc">Template : Closing</span></div>
+      <div class="box row g10" style="padding:8px 8px 8px 14px;background:var(--fill);"><span class="t3" style="flex:1;">Écrire à Camille…</span><span class="btn pri sm">➤</span></div>
+    </div></div>`;
+  return shell('inbox',`<div style="display:flex;flex:1;min-height:0;">${list}${thread}</div>`);
+}
+
+/* ============ LEADS ============ */
+function leadsPage(){
+  const statusTabs=['Tous 3','Engagées 1','En cours 1','Appels','Follow-up','RDV 1','Perdus','Non qual.'];
+  const lanes=[['Engagée',[['Antonin Goisque','warm','25']]],['En cours',[['Mahé Aberlin','hot','50']]],['Appels',[]],['Follow-up',[]],['RDV booké',[['Nassim Aberkane','hot','95']]],['Perdus',[]]];
+  const kanban=`<div class="kan">${lanes.map(([n,cards])=>`<div class="lane"><h4>${n}<span class="t3">${cards.length}</span></h4>
+    ${cards.map(([cn,tp,sc])=>`<div class="kcard col g8"><div class="row" style="justify-content:space-between;"><span class="h3" style="font-size:13px;">${cn}</span><span class="dot ${tp}"></span></div><div class="row g6"><span class="chip" style="padding:2px 8px;">Score ${sc}</span><span class="chip" style="padding:2px 8px;">Écrit</span></div><span class="btn gh sm" style="justify-content:center;">Ouvrir conversation</span></div>`).join('')||'<div class="box s2" style="border-style:dashed;height:54px;border-radius:9px;"></div>'}
+  </div>`).join('')}</div>`;
+  const rows=[['Nassim Aberkane','hot','RDV booké','good','95','09/06'],['Mahé Aberlin','hot','En cours','','50','09/06'],['Antonin Goisque','warm','Conversation engagée','acc','25','09/06']];
+  const table=`<div class="box" style="overflow:hidden;"><table class="wf"><thead><tr><th>Nom</th><th>Temp.</th><th>Statut</th><th>Persona</th><th>Format</th><th>Score</th><th>Date</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td style="font-weight:600;">${r[0]}</td><td><span class="dot ${r[1]}" style="display:inline-block;"></span></td><td><span class="chip ${r[3]}" style="padding:2px 9px;">${r[2]} ▾</span></td><td class="t3">—</td><td><span class="chip" style="padding:2px 9px;">Écrit</span></td><td style="font-weight:700;">${r[4]}</td><td class="t3">${r[5]}</td></tr>`).join('')}
+  </tbody></table></div>`;
+  const content=topbar('<h1 class="h1">Leads</h1>','<span class="btn sm">⤓ Exporter</span><span class="btn sm">⤒ Importer</span><span class="btn pri sm">+ Nouveau lead</span>')+
+  `<div class="content has-subtabs">
+    <div class="row g10 wrap"><div class="search" style="flex:1;min-width:220px;"><span class="gl"></span>Rechercher un lead…</div><span class="chip">Tout format ▾</span><span class="chip">Tous secteurs ▾</span><span class="chip">Score ↓</span></div>
+    <div class="row g6 wrap">${statusTabs.map((t,i)=>`<span class="chip ${i===0?'on':''}">${t}</span>`).join('')}</div>
+    <div class="subtabs"><button class="on" data-sub="kan">Kanban</button><button data-sub="tab">Table</button></div>
+    <div class="subpanel on" data-pane="kan">${kanban}</div>
+    <div class="subpanel" data-pane="tab">${table}</div>
+  </div>`;
+  return shell('leads',content);
+}
+
+/* ============ FOLLOW-UPS ============ */
+function followPage(){
+  const task=(tag,tagc,n,sub,date)=>`<div class="box pad12 row g12"><span class="chip ${tagc}">${tag}</span><div class="col g6" style="flex:1;"><span class="h3" style="font-size:14px;">${n}</span><span class="t3">${sub} · ${date}</span></div><span class="btn sm">Ouvrir</span><span class="btn pri sm">✓ Fait</span></div>`;
+  const content=topbar('<div class="col g6"><h1 class="h1">Follow-ups</h1><span class="t3">Tes prochaines actions, triées par priorité</span></div>')+
+  `<div class="content">
+    <div class="row g6 wrap"><span class="chip on">Toutes 3</span><span class="chip" style="color:var(--hot);">En retard 1</span><span class="chip">Aujourd'hui 2</span><span class="chip">Cette semaine 3</span><span style="flex:1;"></span><span class="chip">Toutes priorités ▾</span><span class="chip">Tous types ▾</span></div>
+    <div class="col g12">
+      <span class="tiny">En retard</span>
+      ${task('Haute','hot','Relancer Antonin Goisque','Sans réponse depuis 6 j','11 juin')}
+      <span class="tiny" style="margin-top:6px;">Aujourd'hui</span>
+      ${task('Medium','warm','Proposer un créneau à Camille','Réponse positive reçue',"Aujourd'hui")}
+      ${task('Medium','warm','Relancer un lead supprimé','Reprendre la conversation',"Aujourd'hui")}
+    </div>
+  </div>`;
+  return shell('followups',content);
+}
+
+/* ============ RESSOURCES ============ */
+function ressourcesPage(){
+  const tcard=(t)=>`<div class="box pad col g10"><div class="row" style="justify-content:space-between;"><span class="h3" style="font-size:13.5px;">${t}</span><span class="dot cold"></span></div>${phl(['100%','92%','70%'])}<div class="row g6"><span class="chip" style="padding:2px 8px;">Accroche</span><span class="chip" style="padding:2px 8px;">Écrit</span></div><div class="row g8"><span class="btn gh sm" style="flex:1;justify-content:center;">Aperçu</span><span class="btn pri sm" style="flex:1;justify-content:center;">Utiliser</span></div></div>`;
+  const pcard=(n,sec,role)=>`<div class="box pad col g10"><div class="row g10">${av(n[0],36)}<div class="col"><span class="h3" style="font-size:13.5px;">${n}</span><span class="t3">${role}</span></div></div><div class="row g6"><span class="chip acc" style="padding:2px 8px;">${sec}</span><span class="chip" style="padding:2px 8px;">PME</span></div><span class="tiny">Douleurs</span>${phl(['100%','80%'])}<span class="btn gh sm" style="justify-content:center;">Voir la fiche</span></div>`;
+  const content=topbar('<h1 class="h1">Ressources</h1>')+
+  `<div class="content has-subtabs" style="gap:14px;">
+    <div class="subtabs"><button class="on" data-sub="scripts">Scripts &amp; templates</button><button data-sub="personas">Personas / Cibles</button></div>
+    <div class="subpanel on" data-pane="scripts">
+      <div class="row g10 wrap" style="margin-bottom:14px;"><div class="search" style="flex:1;min-width:220px;"><span class="gl"></span>Rechercher un script…</div><span class="chip on">Tous</span><span class="chip">Accroche</span><span class="chip">Relance</span><span class="chip">Closing</span><span class="btn pri sm" style="margin-left:auto;">+ Nouveau</span></div>
+      <div class="grid" style="grid-template-columns:repeat(3,1fr);">${['Accroche douce — coach','Relance J+3','Closing RDV','Réponse à objection prix','Icebreaker reco','Bump "tu as vu ?"'].map(tcard).join('')}</div>
+    </div>
+    <div class="subpanel" data-pane="personas">
+      <div class="row" style="justify-content:space-between;margin-bottom:14px;"><div class="search" style="flex:1;max-width:320px;"><span class="gl"></span>Rechercher une persona…</div><span class="btn pri sm">+ Nouvelle persona</span></div>
+      <div class="grid" style="grid-template-columns:repeat(3,1fr);">${pcard('Coach business','Coaching','Indépendant·e')}${pcard('Head of Sales','SaaS B2B','Décideur')}${pcard('Fondateur agence','Agence','CEO / Founder')}</div>
+    </div>
+  </div>`;
+  return shell('ressources',content);
+}
+
+/* ============ LEADERBOARD ============ */
+function leaderboardPage(){
+  const content=topbar('<h1 class="h1">Leaderboard</h1>')+
+  `<div class="content">
+    <div class="row g6 wrap"><span class="chip">Aujourd'hui</span><span class="chip on">Semaine</span><span class="chip">Mois</span><span class="chip">Trimestre</span><span style="flex:1;"></span><span class="chip">Score global ▾</span></div>
+    <div class="note">Vue <b>solo</b> : ton classement personnel. Pour une <b>agence</b>, cet écran liste tous les setters de l'espace de travail (podium + tableau) — d'où le regroupement « Équipe ».</div>
+    <div class="box" style="overflow:hidden;"><table class="wf"><thead><tr><th>#</th><th>Setter</th><th>Conversations</th><th>Réponses</th><th>Appels</th><th>RDV</th><th>Score</th></tr></thead><tbody>
+      <tr style="background:var(--accent-weak);"><td>🏆</td><td style="font-weight:700;">${'Romain Goupille'} <span class="t3">(vous)</span></td><td>3</td><td>1</td><td>0</td><td>1</td><td><span class="chip acc" style="padding:2px 10px;">16</span></td></tr>
+      ${[['2','Léa M.','—','—','—','—','—'],['3','Karim B.','—','—','—','—','—']].map(r=>`<tr><td class="t3">${r[0]}</td><td>${av(r[1][0],26)} <span style="font-weight:600;">${r[1]}</span></td>${r.slice(2).map(c=>`<td class="t3">${c}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+  </div>`;
+  return shell('leaderboard',content);
+}
+
+/* ============ PARAMÈTRES ============ */
+function settingsPage(){
+  const field=(l,v,ph2)=>`<div class="col g6"><span class="t3" style="font-weight:600;">${l}</span><div class="box s2" style="padding:9px 11px;border-radius:9px;font-size:13.5px;${v?'':'color:var(--ink3);'}">${v||ph2}</div></div>`;
+  const profil=`<div class="box pad col g14" style="max-width:560px;"><h3 class="h3">Profil</h3>${field('Email','','romain@scalezia.co')}${field('Nom complet','Romain Goupille')}${field('Rôle','User')}<span class="btn pri" style="align-self:flex-start;">Enregistrer</span></div>`;
+  const linkedin=`<div class="box pad col g12" style="max-width:560px;"><h3 class="h3">Intégration LinkedIn</h3><span class="t3">Connecte ton compte pour synchroniser tes conversations.</span><div class="box s2 row g10" style="padding:12px;border-radius:9px;"><span class="dot good"></span><div class="col" style="flex:1;"><span class="h3" style="font-size:13.5px;">LinkedIn connecté</span><span class="t3">Romain Goupille 🚀</span></div><span class="btn sm">Déconnecter</span></div></div>`;
+  const espace=`<div class="box pad col g14" style="max-width:680px;"><div class="row" style="justify-content:space-between;"><h3 class="h3">Espace de travail</h3><span class="btn pri sm">+ Inviter un membre</span></div>${field("Nom de l'espace",'Scalezia')}<hr class="divh"/><span class="tiny">Membres (3)</span>
+    <div class="box" style="overflow:hidden;"><table class="wf"><thead><tr><th>Membre</th><th>Rôle</th><th>Statut</th><th></th></tr></thead><tbody>
+    ${[['Romain Goupille','Admin','Actif'],['Léa Martin','Setter','Actif'],['Karim B.','Setter','Invité']].map(r=>`<tr><td class="row g8" style="border:0;">${av(r[0][0],26)}<span style="font-weight:600;">${r[0]}</span></td><td><span class="chip" style="padding:2px 9px;">${r[1]} ▾</span></td><td class="t3">${r[2]}</td><td style="text-align:right;"><span class="t3">···</span></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  const facturation=`<div class="col g14" style="max-width:680px;">
+    <div class="box pad row g16" style="border-color:var(--accent-line);align-items:center;"><div class="col g6" style="flex:1;"><span class="tiny">Plan actuel</span><span class="h2">Free</span><span class="t3">3 leads/mois · 1 compte LinkedIn</span></div><span class="btn pri">Passer en Pro →</span></div>
+    <div class="row g14"><div class="box pad col g6" style="flex:1;"><span class="t3">Leads ce mois</span><span class="v" style="font-size:20px;">3 / 3</span><div class="ph" style="height:6px;width:100%;border-radius:99px;background:linear-gradient(90deg,var(--hot) 100%,var(--fill2) 0);"></div></div><div class="box pad col g6" style="flex:1;"><span class="t3">Comptes LinkedIn</span><span class="v" style="font-size:20px;">1 / 1</span></div></div>
+    <div class="box pad col g10"><h3 class="h3">Factures</h3><span class="t3">Aucune facture — vous êtes en plan Free.</span></div>
+  </div>`;
+  const content=topbar('<h1 class="h1">Paramètres</h1>')+
+  `<div class="content has-subtabs">
+    <div class="subtabs"><button class="on" data-sub="p">Profil</button><button data-sub="li">Intégration LinkedIn</button><button data-sub="ws">Espace de travail</button><button data-sub="bill">Facturation</button></div>
+    <div class="subpanel on" data-pane="p">${profil}</div>
+    <div class="subpanel" data-pane="li">${linkedin}</div>
+    <div class="subpanel" data-pane="ws">${espace}</div>
+    <div class="subpanel" data-pane="bill">${facturation}</div>
+  </div>`;
+  return shell('settings',content);
+}
+
+/* ============ router ============ */
+const PAGES=[['plan','Plan & IA'],['dash','Dashboard'],['inbox','Inbox'],['leads','Leads'],['followups','Follow-ups'],['ressources','Ressources'],['leaderboard','Leaderboard'],['settings','Paramètres']];
+const FN={dash:dashPage,inbox:inboxPage,leads:leadsPage,followups:followPage,ressources:ressourcesPage,leaderboard:leaderboardPage,settings:settingsPage};
+const CAPS={
+  plan:'<span class="pill">Proposition</span>Refonte de l\'architecture : <b>6 entrées</b> au lieu de 10, des pages regroupées en onglets, et l\'abonnement géré par une carte sidebar pour les comptes Free. Donne-moi ton avis avant que je décline en hi-fi.',
+  dash:'<span class="pill">Dashboard</span>Layout « journée en focus » : score/série en bandeau, <b>une action prioritaire</b> mise en avant, puis KPIs et conversion. Le résumé Follow-ups vit ici.',
+  inbox:'<span class="pill">Inbox</span>Layout B validé : liste + conversation, contexte du lead en chips (le panneau complet s\'ouvre à la demande), <b>suggestions</b> au-dessus du composer.',
+  leads:'<span class="pill">Leads</span>Bascule <b>Kanban / Table</b>. Kanban = pipeline visuel par statut ; Table = lecture dense + filtres. (ex-« CRM Leads »)',
+  followups:'<span class="pill">Follow-ups</span>File de relances triée par priorité, groupée par échéance (En retard / Aujourd\'hui / Semaine).',
+  ressources:'<span class="pill">Ressources</span>Hub à onglets : <b>Scripts &amp; templates</b> (ex-Bibliothèque) + <b>Personas</b>. Clique les onglets pour basculer.',
+  leaderboard:'<span class="pill">Leaderboard</span>Classement ; solo aujourd\'hui, vue équipe pour les agences.',
+  settings:'<span class="pill">Paramètres</span>Tout regroupé en onglets : Profil · Intégration LinkedIn · <b>Espace de travail</b> (ex-Workspace) · <b>Facturation</b> (ex-Abonnement). Clique les onglets.'
+};
+let page='plan';
+function renderTabs(){document.getElementById('tabs').innerHTML=PAGES.map(([k,n])=>`<button data-page="${k}" class="${k===page?'on':''}">${n}</button>`).join('');}
+function render(){
+  renderTabs();
+  const stage=document.getElementById('stage');
+  if(page==='plan'){stage.innerHTML=`<div class="frame"><div class="cap">${CAPS.plan}</div>${planHtml()}</div>`;}
+  else{const active=page==='settings'?'settings':page;stage.innerHTML=`<div class="frame"><div class="cap">${CAPS[page]}</div>${shell(active,FN[page]())}</div>`;}
+  window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+  const tab=e.target.closest('[data-page]'); if(tab){page=tab.dataset.page;render();return;}
+  const go=e.target.closest('[data-go]'); if(go){page=go.dataset.go;render();return;}
+  const sub=e.target.closest('[data-sub]'); if(sub){
+    const cont=sub.closest('.has-subtabs');
+    cont.querySelectorAll('.subtabs button').forEach(b=>b.classList.toggle('on',b===sub));
+    cont.querySelectorAll('.subpanel').forEach(p=>p.classList.toggle('on',p.dataset.pane===sub.dataset.sub));
+  }
+});
+render();
+</script>
+</body>
+</html>

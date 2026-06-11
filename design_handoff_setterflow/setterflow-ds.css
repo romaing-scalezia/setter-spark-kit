@@ -1,0 +1,76 @@
+/* ============================================================
+   SetterFlow — Design System "Atlas"
+   Source de vérité unique. Tous les écrans référencent ces tokens.
+   Direction : sobre, précise, froide · accent iris.
+   ============================================================ */
+
+:root{
+  /* ---------- Couleurs : surfaces & neutres ---------- */
+  --sf-bg:#FAFAFB;            /* fond applicatif */
+  --sf-surface:#FFFFFF;       /* cartes, panneaux, colonnes */
+  --sf-surface-2:#F5F5F7;     /* zones secondaires, hovers doux, inputs */
+  --sf-surface-3:#EFEFF2;     /* hovers appuyés, pistes de barres */
+  --sf-border:#EAEAEE;        /* bordure standard */
+  --sf-border-strong:#DCDCE2; /* bordure d'input, séparateur marqué */
+
+  /* ---------- Couleurs : texte ---------- */
+  --sf-text:#15161A;          /* titres, texte principal */
+  --sf-text-2:#5C606A;        /* texte secondaire, labels */
+  --sf-text-3:#9A9EA8;        /* texte tertiaire, placeholders, méta */
+
+  /* ---------- Couleurs : accent (iris) ---------- */
+  --sf-accent:#5851E8;
+  --sf-accent-hover:#4A43DA;
+  --sf-accent-weak:#EDECFD;   /* fond de chip/sélection */
+  --sf-accent-line:#D9D7FB;   /* bordure sur fond weak */
+  --sf-on-accent:#FFFFFF;
+  --sf-accent-dark:#9D98FF;   /* accent sur fond sombre */
+
+  /* ---------- Couleurs : sémantique (température lead / statuts) ---------- */
+  --sf-hot:#E5484D;     --sf-hot-weak:#FCEBEC;     /* chaud */
+  --sf-warm:#D6890C;    --sf-warm-weak:#FBF1DD;    /* tiède */
+  --sf-good:#2F9E66;    --sf-good-weak:#E4F4EC;    /* succès / RDV booké */
+  --sf-cold:#9A9EA8;                               /* froid (= text-3) */
+
+  /* ---------- Avatars (palette de fonds) ---------- */
+  --sf-av-1:#E0A030; --sf-av-2:#7C82F0; --sf-av-3:#E06A9C; --sf-av-4:#42A877;
+  --sf-av-5:#5BA0E0; --sf-av-6:#9B6BD8; --sf-av-7:#E07A4F; --sf-av-8:#5FB0A8;
+
+  /* ---------- Typographie ---------- */
+  --sf-font:'Satoshi','Inter',system-ui,-apple-system,sans-serif;
+  /* échelle (px / line-height / weight conseillés) */
+  --sf-text-display:32px;  /* h0 — titres de page exceptionnels */
+  --sf-text-h1:21px;       /* titre de page */
+  --sf-text-h2:16px;       /* titre de section / carte */
+  --sf-text-h3:14px;       /* sous-titre, libellé fort */
+  --sf-text-body:14px;     /* corps */
+  --sf-text-sm:13px;       /* secondaire */
+  --sf-text-xs:12px;       /* méta */
+  --sf-text-micro:11px;    /* labels uppercase */
+  --sf-weight-regular:400;
+  --sf-weight-medium:500;
+  --sf-weight-semibold:600;
+  --sf-weight-bold:700;
+  --sf-weight-black:800;
+  --sf-tracking-tight:-0.02em; /* gros titres */
+  --sf-tracking-label:0.06em;  /* labels uppercase */
+
+  /* ---------- Espacements (échelle 4px) ---------- */
+  --sf-space-1:4px;  --sf-space-2:8px;  --sf-space-3:12px; --sf-space-4:16px;
+  --sf-space-5:20px; --sf-space-6:24px; --sf-space-8:32px; --sf-space-10:40px;
+
+  /* ---------- Rayons ---------- */
+  --sf-radius-sm:7px;
+  --sf-radius:9px;     /* défaut : boutons, inputs, items de nav */
+  --sf-radius-lg:13px; /* cartes, panneaux */
+  --sf-radius-pill:999px;
+
+  /* ---------- Ombres ---------- */
+  --sf-shadow-sm:0 1px 2px rgba(16,17,26,.05);
+  --sf-shadow:0 1px 2px rgba(16,17,26,.05),0 4px 12px rgba(16,17,26,.05);
+  --sf-shadow-lg:0 12px 40px rgba(16,17,26,.14);
+
+  /* ---------- Transitions ---------- */
+  --sf-ease:cubic-bezier(.32,.72,0,1);
+  --sf-dur:.22s;
+}

@@ -1,0 +1,107 @@
+/* ============================================================
+   SetterFlow — Thème "Atlas" porté sur ton système shadcn/ui
+   Remplace le bloc @layer base { :root {…} .dark {…} } de
+   src/index.css par celui-ci (et la 1re ligne @import de la police).
+   Aucune autre variable que les tiennes : tout le reste de l'app
+   se reskin automatiquement.
+   Décision produit : clair uniquement (le bloc .dark est fourni
+   à jour mais hors périmètre).
+   ============================================================ */
+
+/* Police : Inter -> Satoshi. Remplace la ligne @import en haut de src/index.css. */
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,800&display=swap');
+/* Puis, dans tailwind.config.ts -> theme.extend.fontFamily :
+   sans: ["Satoshi", "Inter", "system-ui", "sans-serif"]  */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* surfaces & texte (neutres froids) */
+    --background: 240 20% 98%;        /* #FAFAFB */
+    --foreground: 228 11% 9%;         /* #15161A */
+    --card: 0 0% 100%;
+    --card-foreground: 228 11% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 11% 9%;
+
+    /* accent de marque : IRIS (= --primary) */
+    --primary: 243 77% 61%;           /* #5851E8 */
+    --primary-foreground: 0 0% 100%;
+
+    /* neutres shadcn (secondary/muted/accent = surfaces grises, PAS la marque) */
+    --secondary: 240 11% 96%;         /* #F5F5F7 */
+    --secondary-foreground: 223 8% 39%;
+    --muted: 240 11% 96%;
+    --muted-foreground: 223 9% 63%;   /* #9A9EA8 */
+    --accent: 240 11% 96%;            /* hover neutre */
+    --accent-foreground: 223 8% 39%;
+
+    /* sémantique */
+    --destructive: 358 75% 59%;       /* #E5484D chaud / danger */
+    --destructive-foreground: 0 0% 100%;
+    --success: 150 54% 40%;           /* #2F9E66 RDV booké */
+    --success-foreground: 0 0% 100%;
+    --warning: 37 89% 44%;            /* #D6890C tiède */
+    --warning-foreground: 0 0% 100%;
+
+    /* lignes & focus */
+    --border: 240 11% 93%;            /* #EAEAEE */
+    --input: 240 9% 87%;              /* #DCDCE2 (bordure d'input) */
+    --ring: 243 77% 61%;
+
+    --radius: 0.625rem;               /* 10px. Cartes/panneaux : rounded-xl (13px). */
+
+    /* sidebar : surface grise, item actif = carte blanche + texte iris */
+    --sidebar-background: 240 13% 96%;
+    --sidebar-foreground: 223 8% 39%;
+    --sidebar-primary: 243 77% 61%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 243 77% 61%;
+    --sidebar-border: 240 11% 91%;
+    --sidebar-ring: 243 77% 61%;
+  }
+
+  /* Hors périmètre (clair uniquement) — fourni à jour pour ne rien casser */
+  .dark {
+    --background: 240 16% 8%;
+    --foreground: 240 14% 93%;
+    --card: 240 16% 11%;
+    --card-foreground: 240 14% 93%;
+    --popover: 240 16% 11%;
+    --popover-foreground: 240 14% 93%;
+    --primary: 243 80% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 10% 17%;
+    --secondary-foreground: 240 12% 85%;
+    --muted: 240 10% 17%;
+    --muted-foreground: 240 8% 58%;
+    --accent: 240 10% 17%;
+    --accent-foreground: 240 12% 85%;
+    --destructive: 358 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 150 45% 38%;
+    --success-foreground: 0 0% 100%;
+    --warning: 37 75% 48%;
+    --warning-foreground: 0 0% 100%;
+    --border: 240 10% 19%;
+    --input: 240 10% 19%;
+    --ring: 243 80% 67%;
+    --sidebar-background: 240 16% 9%;
+    --sidebar-foreground: 240 12% 85%;
+    --sidebar-primary: 243 80% 67%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 15%;
+    --sidebar-accent-foreground: 240 12% 90%;
+    --sidebar-border: 240 10% 16%;
+    --sidebar-ring: 243 80% 67%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+}

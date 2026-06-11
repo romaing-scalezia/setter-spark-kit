@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="atlas">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SetterFlow — Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700,800,900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link href="inbox.css" rel="stylesheet" />
+</head>
+<body data-theme-host>
+<div class="review-bar">
+  <span class="rb-brand"><span class="d"></span>SetterFlow</span>
+  <span class="rb-sub">Maquette · Inbox LinkedIn (hi-fi)</span>
+  <div class="rb-switch">
+    <span class="lab">Direction visuelle</span>
+    <div class="seg">
+      <button data-set="atlas" class="on">Atlas<small>sobre &middot; précis</small></button>
+      <button data-set="ember">Ember<small>chaleureux &middot; éditorial</small></button>
+    </div>
+  </div>
+</div>
+<div class="app" id="app"></div>
+
+<!-- context slide-over -->
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel"></aside>
+
+<script>
+/* ---------- icons (lucide-style) ---------- */
+const I = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  inbox:'<path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  trophy:'<path d="M6 9a6 6 0 0 0 12 0V4H6Z"/><path d="M6 4H4v2a3 3 0 0 0 2 2.8"/><path d="M18 4h2v2a3 3 0 0 1-2 2.8"/><path d="M9 19h6"/><path d="M12 15v4"/>',
+  book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
+  layers:'<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/>',
+  card:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
+  settings:'<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  send:'<path d="M14.5 3.5 21 21l-9-4-9 4 6.5-17.5"/><path d="M12 17V8"/>',
+  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  chevron:'<path d="m6 9 6 6 6-6"/>',
+  more:'<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  sparkles:'<path d="M12 3 13.6 8.4 19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3Z"/><path d="M19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7Z"/>',
+  paperclip:'<path d="M21 11.5 12.5 20a5 5 0 0 1-7-7L14 4.5a3.3 3.3 0 0 1 4.7 4.7L10 18a1.6 1.6 0 0 1-2.3-2.3L16 7"/>',
+  external:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  flame:'<path d="M12 2c1 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1 .3-1.8.7-2.5C9 9 9.5 10 11 10c0-2.5-1-4 1-8Z" transform="translate(0,1)"/><path d="M12 22a6 6 0 0 0 6-6c0-2-1-3.5-2.2-4.8C15 13 14 13.5 13 13c.7 1.6-.3 2.6-1 2.6-1.2 0-1.6-1-1.6-2C9 14.6 6 15.4 6 18a6 6 0 0 0 6 4Z"/>',
+  trash:'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+  link:'<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><path d="M8 12h8"/>'
+};
+const svg=(n,c='ico')=>`<svg class="${c}" viewBox="0 0 24 24">${I[n]}</svg>`;
+
+/* ---------- data ---------- */
+const NAV=[['grid','Dashboard'],['inbox','Inbox',true,12],['users','CRM Leads'],['clock','Follow-ups'],['trophy','Leaderboard'],['book','Bibliothèque'],['target','Personas'],['layers','Workspace'],['card','Abonnement'],['settings','Paramètres']];
+
+const CONVS=[
+  {i:'CM',a:'a1',n:'Camille Mérigon',e:'🌴',t:'29 min',temp:'hot',sel:true,p:'Tu pars quelque part pour les vacances ??'},
+  {i:'MB',a:'a3',n:'Mary Bornaghi',t:'22 h',temp:'warm',p:'Carrément, on cale ça la semaine pro alors 🙌'},
+  {i:'MA',a:'a2',n:'Mahé Aberlin',t:'1 j',temp:'hot',p:'Vous : Je te partage le lien juste ici'},
+  {i:'AG',a:'a7',n:'Antonin Goisque',e:'🐙',t:'6 j',temp:'warm',unread:1,p:'Ah pas mal ton approche, tu fais ça depuis longtemps ?'},
+  {i:'NA',a:'a4',n:'Nassim Aberkane',t:'5 j',temp:'hot',p:'Parfait, je bloque le créneau de jeudi 14h'},
+  {i:'JR',a:'a5',n:'Julie Rosier',t:'5 j',temp:'cold',p:'Vous : Hello Julie ! Je me permets de revenir vers toi'},
+  {i:'RG',a:'a6',n:'Robin Guédoit',t:'6 j',temp:'cold',p:'Merci pour le partage, je regarde ça à tête reposée'},
+  {i:'JA',a:'a8',n:'Jeremy Attias',t:'6 j',temp:'cold',p:'Vous : Top, je te tiens au courant'},
+  {i:'GM',a:'a2',n:'Guillaume Marquis',t:'12 j',temp:'cold',p:'Pas dispo cette semaine, on en reparle ?'}
+];
+
+const MSGS=[
+  {sep:'Février 2025'},
+  {d:'out',t:'tu as fais des propales à tous en mode full présentiel ?'},
+  {d:'out',t:"je suis en vacances ce soir pour une semaine donc j'espère que si tu as un besoin ce sera pas pour la semaine pro ahaha"},
+  {d:'in',t:"Kold Lanta visio + présentiel ( Paris & Bdx )\nPrésentiel fin février ou début mars donc good malgré tes vacances :)\nEt full visio pour des accompagnements post Kold Lanta (2 en cours de négo)"},
+  {d:'out',t:"ça va encore paris et bordeaux tu y es rapidosse en train déjà !!\nc'est très très lourd tout ça pour un mois de janvier"},
+  {d:'in',t:"Oui ça va le faire niveau orga. Mais ouais depuis décembre c'est la folie, j'ai prospecté / relancé mon pipe et de la reco qui s'active fort.\nTu pars quelque part pour les vacances ??"},
+  {d:'out',t:"c'est royal ça après un an tout juste de lancement ça s'active fort, je suis vraiment content pour toi ma star !"},
+  {d:'in',t:"C'est gentil ! Kold Lanta ça date de juin, mon premier client. Avant je faisais du SDR en freelance 😄\nRégale-toi GoupsiBoy !"}
+];
+
+/* ---------- render app ---------- */
+function renderApp(){
+  document.getElementById('app').innerHTML=`
+  <aside class="sidebar">
+    <div class="brand"><span class="mark">${svg('send')}</span><span class="name">SetterFlow</span></div>
+    <div class="nav-label">Navigation</div>
+    ${NAV.map(([ic,n,active,badge])=>`<a class="nav-item ${active?'active':''}">${svg(ic)}<span>${n}</span>${badge?`<span class="badge">${badge}</span>`:''}</a>`).join('')}
+    <div class="sidebar-foot">
+      <div class="score-card">
+        <div class="score-top"><span class="lab">${svg('flame','ico xs')} Setting Score</span><span class="lvl">Niv. 1</span></div>
+        <div class="score-num">16</div>
+        <div class="score-track"><i></i></div>
+        <div class="score-sub"><span>Vers niv. 2</span><span>64%</span></div>
+      </div>
+      <div class="user-row">
+        <span class="avatar a6" style="width:32px;height:32px;font-size:12px;">RG</span>
+        <div><div class="u-name">Romain Goupille</div><div class="u-mail">romain@scalezia.co</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <section class="inbox">
+    <div class="inbox-head">
+      <div class="inbox-title"><h1 class="display">Inbox</h1><span class="count">50 conversations</span></div>
+      <div class="search">${svg('search','ico sm')}<input placeholder="Rechercher une conversation…"/></div>
+      <div class="filters">
+        <span class="chip on">Tous</span>
+        <span class="chip">Non lus</span>
+        <span class="chip">🔥 Chauds</span>
+        <span class="chip">${svg('clock','ico xs')} À relancer</span>
+      </div>
+    </div>
+    <div class="conv-list">
+      ${CONVS.map(c=>`
+        <div class="conv ${c.sel?'sel':''} ${c.unread?'unread':''}">
+          <span class="avatar ${c.a}" style="width:42px;height:42px;">${c.i}</span>
+          <div class="conv-main">
+            <div class="conv-top">
+              <span class="conv-name"><span class="temp-dot ${c.temp}"></span>${c.n}${c.e?' '+c.e:''}</span>
+              <span class="conv-time">${c.t}</span>
+            </div>
+            <div class="conv-prev">${c.p}</div>
+          </div>
+          ${c.unread?`<span class="unread-badge">${c.unread}</span>`:''}
+        </div>`).join('')}
+    </div>
+  </section>
+
+  <section class="thread">
+    <div class="thread-head">
+      <div class="th-id">
+        <span class="avatar a1" style="width:44px;height:44px;">CM</span>
+        <div>
+          <div class="th-name display">Camille Mérigon 🌴</div>
+          <div class="th-sub">
+            <span class="lead-chip hot">🔥 Chaud</span>
+            <span class="lead-chip score">Score 82</span>
+            <span class="lead-chip status">Conversation engagée</span>
+          </div>
+        </div>
+      </div>
+      <div class="th-actions">
+        <button class="btn primary">${svg('calendar','ico sm')} Booker un RDV</button>
+        <button class="btn">Statut ${svg('chevron','ico sm')}</button>
+        <button class="icon-btn" id="openPanel" title="Voir le profil">${svg('users','ico sm')}</button>
+        <button class="icon-btn">${svg('more','ico sm')}</button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      ${MSGS.map(m=>m.sep?`<div class="day-sep">${m.sep}</div>`:`
+        <div class="msg ${m.d}">
+          <div class="bubble">${m.t}${m.d==='in'?'<div class="meta">Camille · LinkedIn</div>':'<div class="meta">Vous · lu</div>'}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="composer">
+      <div class="suggestions">
+        <span class="sugg-label">${svg('sparkles','ico xs')} Suggestions</span>
+        <button class="suggestion">${svg('calendar','ico xs')} Proposer un créneau jeudi</button>
+        <button class="suggestion">Répondre chaleureusement</button>
+        <button class="suggestion">Template : Closing RDV</button>
+      </div>
+      <div class="input-wrap">
+        <textarea rows="1" placeholder="Écrire à Camille…"></textarea>
+        <div class="composer-tools">
+          <button class="icon-btn" style="border:none;background:none;">${svg('paperclip','ico sm')}</button>
+          <button class="send-btn">${svg('send','ico sm')}</button>
+        </div>
+      </div>
+    </div>
+  </section>`;
+
+  document.getElementById('openPanel').addEventListener('click',openPanel);
+  autoGrow();
+}
+
+function renderPanel(){
+  document.getElementById('panel').innerHTML=`
+    <div class="panel-head">
+      <span class="avatar a1" style="width:48px;height:48px;">CM</span>
+      <div>
+        <div class="ph-name display">Camille Mérigon 🌴</div>
+        <div class="ph-role">Coach business · Indépendante</div>
+      </div>
+      <button class="icon-btn close" id="closePanel">${svg('x','ico sm')}</button>
+    </div>
+    <div class="panel-body">
+      <button class="qa full" style="width:100%;">${svg('calendar','ico sm')} Booker un RDV</button>
+
+      <div>
+        <div class="psec-title">Informations</div>
+        <div class="field-grid">
+          <div class="field"><label>Entreprise</label><input value="Indépendante"/></div>
+          <div class="field"><label>Poste</label><input value="Coach business"/></div>
+          <div class="field"><label>Statut</label>
+            <select><option>Conversation engagée</option><option>RDV booké</option><option>En cours</option><option>Perdu</option></select>
+          </div>
+          <div class="field"><label>Format d'approche</label>
+            <select><option>✍️ Écrit</option><option>🎥 Vidéo</option><option>🎙️ Vocal</option></select>
+          </div>
+        </div>
+        <a href="#" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--accent);margin-top:12px;text-decoration:none;">${svg('external','ico xs')} Voir le profil LinkedIn</a>
+      </div>
+
+      <div>
+        <div class="psec-title">Persona / Cible</div>
+        <div style="display:flex;flex-direction:column;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:11px 13px;">
+          <div style="font-weight:700;font-size:13.5px;">${svg('target','ico xs')} Coach business — solo</div>
+          <div style="font-size:12.5px;color:var(--text-2);">Cherche à structurer son acquisition. Douleur : irrégularité du pipe. Angle : preuve sociale + simplicité.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="psec-title">Actions rapides</div>
+        <div class="quick-actions">
+          <button class="qa">${svg('check','ico sm')} Marquer répondu</button>
+          <button class="qa">${svg('clock','ico sm')} Relance +3 j</button>
+          <button class="qa">${svg('link','ico sm')} Lier un lead</button>
+          <button class="qa danger">${svg('trash','ico sm')} Supprimer</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="psec-title">Notes</div>
+        <textarea class="note-input" rows="3" placeholder="Ajouter une note…">A lancé son activité il y a 1 an. Kold Lanta = son offre signature. Rapport très chaleureux, tutoiement.</textarea>
+      </div>
+
+      <div>
+        <div class="psec-title">Historique</div>
+        <div class="timeline">
+          <div class="tl-item"><span class="tl-dot"></span><div class="tl-body"><div class="tl-txt">Réponse reçue — sentiment positif</div><div class="tl-time">Il y a 29 minutes</div></div></div>
+          <div class="tl-item"><span class="tl-dot"></span><div class="tl-body"><div class="tl-txt">Statut : En cours → Conversation engagée</div><div class="tl-time">09/06 · 14:47</div></div></div>
+          <div class="tl-item"><span class="tl-dot"></span><div class="tl-body"><div class="tl-txt">Lead créé depuis l'Inbox</div><div class="tl-time">09/06 · 14:47</div></div></div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('closePanel').addEventListener('click',closePanel);
+}
+
+function openPanel(){document.getElementById('panel').classList.add('open');document.getElementById('scrim').classList.add('open');}
+function closePanel(){document.getElementById('panel').classList.remove('open');document.getElementById('scrim').classList.remove('open');}
+
+function autoGrow(){
+  const ta=document.querySelector('.input-wrap textarea');
+  if(!ta)return;
+  ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,120)+'px';});
+}
+
+/* direction switch */
+document.querySelector('.rb-switch').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.documentElement.setAttribute('data-theme',b.dataset.set);
+  document.querySelectorAll('.rb-switch button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+document.getElementById('scrim').addEventListener('click',closePanel);
+renderApp();
+renderPanel();
+</script>
+</body>
+</html>
