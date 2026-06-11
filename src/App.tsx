@@ -17,6 +17,7 @@ import Inbox from "./pages/Inbox";
 import CoachPage, { CoachStudentPage } from "./pages/Coach";
 import Library from "./pages/Library";
 import PersonasPage from "./pages/Personas";
+import Ressources from "./pages/Ressources";
 import AdminPage from "./pages/Admin";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminAssignments from "./pages/AdminAssignments";
@@ -83,6 +84,7 @@ const App = () => (
             <Route path="/coach" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach/students/:id" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachStudentPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/leaderboard" element={<OnboardingGuard><AuthGuard><LeaderboardPage /></AuthGuard></OnboardingGuard>} />
+            <Route path="/ressources" element={<OnboardingGuard><AuthGuard><Ressources /></AuthGuard></OnboardingGuard>} />
             <Route path="/library" element={<OnboardingGuard><AuthGuard><Library /></AuthGuard></OnboardingGuard>} />
             <Route path="/personas" element={<OnboardingGuard><AuthGuard><PersonasPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminPage /></AuthGuard></OnboardingGuard>} />
@@ -90,8 +92,8 @@ const App = () => (
             <Route path="/admin/assignments" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminAssignments /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/teams" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminTeams /></AuthGuard></OnboardingGuard>} />
             <Route path="/settings" element={<OnboardingGuard><AuthGuard><SettingsPage /></AuthGuard></OnboardingGuard>} />
-            <Route path="/workspace" element={<OnboardingGuard><AuthGuard><WorkspacePage /></AuthGuard></OnboardingGuard>} />
-            <Route path="/billing" element={<OnboardingGuard><AuthGuard><BillingPage /></AuthGuard></OnboardingGuard>} />
+            <Route path="/workspace" element={<Navigate to="/settings?tab=workspace" replace />} />
+            <Route path="/billing" element={<Navigate to="/settings?tab=facturation" replace />} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

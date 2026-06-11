@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, ExternalLink, Trash2, Merge } from 'lucide-react';
+import { Plus, Search, ExternalLink, Trash2, Merge, LayoutGrid, List } from 'lucide-react';
 import { format, isToday, isBefore, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { Lead, LeadStatus } from '@/lib/constants';
@@ -461,11 +461,41 @@ export default function Leads() {
 
   const hasActiveFilters = sectorFilter !== 'all' || typeFilter !== 'all' || sizeFilter !== 'all' || outreachFilter !== 'all' || followUpLevelFilter !== 'all';
 
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+
+  const KANBAN_STATUSES: LeadStatus[] = [
+    'conversation_engagee',
+    'en_cours',
+    'appel_propose',
+    'follow_up',
+    'rendez_vous_booke',
+    'ferme_perdu',
+  ];
+
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 space-y-4" data-testid="page-leads">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h1 className="text-2xl font-bold text-foreground">CRM Leads</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">Leads</h1>
+            <div className="flex rounded-md border p-0.5 gap-0.5">
+              <button
+                onClick={() => setViewMode('table')}
+                className={`rounded p-1.5 transition-colors ${viewMode === 'table' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Vue table"
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`rounded p-1.5 transition-colors ${viewMode === 'kanban' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Vue kanban"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <LeadImportExport leads={filteredLeads.map((sl) => sl.lead)} personaMap={personaMap as Map<string, { id: string; name: string }>} />
             <Button onClick={() => setCreateOpen(true)} data-testid="leads-new-lead">
@@ -611,115 +641,190 @@ export default function Leads() {
           </TabsList>
         </Tabs>
 
-        <div className="rounded-lg border bg-card" data-testid="leads-table">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
-                    onCheckedChange={toggleSelectAll}
-                  />
-                </TableHead>
-                <TableHead>Nom</TableHead>
-                <TableHead>Temp.</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead className="hidden sm:table-cell">Cible</TableHead>
-                <TableHead className="hidden sm:table-cell">Format</TableHead>
-                <TableHead className="hidden sm:table-cell">Relance</TableHead>
-                <TableHead className="hidden md:table-cell">Score</TableHead>
-                {showSetterUI && <TableHead className="hidden md:table-cell">Setter</TableHead>}
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="hidden lg:table-cell">LinkedIn</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
+        {viewMode === 'table' ? (
+          <div className="rounded-lg border bg-card" data-testid="leads-table">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={showSetterUI ? 11 : 10} className="text-center py-8 text-muted-foreground">Chargement...</TableCell>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Nom</TableHead>
+                  <TableHead>Temp.</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="hidden sm:table-cell">Cible</TableHead>
+                  <TableHead className="hidden sm:table-cell">Format</TableHead>
+                  <TableHead className="hidden sm:table-cell">Relance</TableHead>
+                  <TableHead className="hidden md:table-cell">Score</TableHead>
+                  {showSetterUI && <TableHead className="hidden md:table-cell">Setter</TableHead>}
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
+                  <TableHead className="hidden lg:table-cell">LinkedIn</TableHead>
                 </TableRow>
-              ) : filteredLeads.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={showSetterUI ? 11 : 10} className="text-center py-8 text-muted-foreground" data-testid="leads-empty-state">Aucun lead trouvé</TableCell>
-                </TableRow>
-              ) : (
-                filteredLeads.map(({ lead, score, temperature }) => {
-                  const persona = getPersona(lead);
-                  return (
-                    <TableRow
-                      key={lead.id}
-                      className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(lead.id) ? 'bg-muted/30' : ''}`}
-                      onClick={() => { setSelectedLeadId(lead.id); setDrawerOpen(true); }}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(lead.id)}
-                          onCheckedChange={() => toggleSelect(lead.id)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <div>
-                          {lead.first_name} {lead.last_name}
-                          {lead.company_name && <p className="text-xs text-muted-foreground">{lead.company_name}</p>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <TemperatureBadge temp={temperature} />
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <StatusDropdown value={lead.status} onValueChange={(s) => handleStatusChange(lead, s)} />
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {persona ? (
-                          <div className="space-y-0.5">
-                            <Badge variant="outline" className="text-xs">{persona.name}</Badge>
-                            <div className="flex flex-wrap gap-1">
-                              {persona.sector && <span className="text-[10px] text-muted-foreground">{persona.sector}</span>}
-                              {persona.target_type && <span className="text-[10px] text-muted-foreground">· {persona.target_type}</span>}
-                            </div>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={showSetterUI ? 11 : 10} className="text-center py-8 text-muted-foreground">Chargement...</TableCell>
+                  </TableRow>
+                ) : filteredLeads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={showSetterUI ? 11 : 10} className="text-center py-8 text-muted-foreground" data-testid="leads-empty-state">Aucun lead trouvé</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredLeads.map(({ lead, score, temperature }) => {
+                    const persona = getPersona(lead);
+                    return (
+                      <TableRow
+                        key={lead.id}
+                        className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(lead.id) ? 'bg-muted/30' : ''}`}
+                        onClick={() => { setSelectedLeadId(lead.id); setDrawerOpen(true); }}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(lead.id)}
+                            onCheckedChange={() => toggleSelect(lead.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <div>
+                            {lead.first_name} {lead.last_name}
+                            {lead.company_name && <p className="text-xs text-muted-foreground">{lead.company_name}</p>}
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                        </TableCell>
+                        <TableCell>
+                          <TemperatureBadge temp={temperature} />
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <StatusDropdown value={lead.status} onValueChange={(s) => handleStatusChange(lead, s)} />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {persona ? (
+                            <div className="space-y-0.5">
+                              <Badge variant="outline" className="text-xs">{persona.name}</Badge>
+                              <div className="flex flex-wrap gap-1">
+                                {persona.sector && <span className="text-[10px] text-muted-foreground">{persona.sector}</span>}
+                                {persona.target_type && <span className="text-[10px] text-muted-foreground">· {persona.target_type}</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {lead.outreach_type ? (
+                            <Badge variant="outline" className="text-xs">{OUTREACH_TYPE_LABELS[lead.outreach_type] || lead.outreach_type}</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <div className="flex items-center gap-1">
+                            {getFollowUpBadge(lead)}
+                            {lead.status === 'follow_up' && (lead as any).follow_up_level > 0 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">FU {(lead as any).follow_up_level}</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <span className="text-xs font-medium text-muted-foreground">{score}</span>
+                        </TableCell>
+                        {showSetterUI && (
+                          <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                            {teammateLabel(teammateMap.get((lead as any).setter_id || lead.owner_id))}
+                          </TableCell>
                         )}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {lead.outreach_type ? (
-                          <Badge variant="outline" className="text-xs">{OUTREACH_TYPE_LABELS[lead.outreach_type] || lead.outreach_type}</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <div className="flex items-center gap-1">
-                          {getFollowUpBadge(lead)}
-                          {lead.status === 'follow_up' && (lead as any).follow_up_level > 0 && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">FU {(lead as any).follow_up_level}</Badge>
+                        <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{format(new Date(lead.created_at), 'dd/MM/yy')}</TableCell>
+                        <TableCell className="hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
+                          {lead.linkedin_url && (
+                            <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          /* Kanban */
+          <div className="overflow-x-auto pb-4" data-testid="leads-kanban">
+            <div className="flex gap-3 min-w-max">
+              {KANBAN_STATUSES.map((status) => {
+                const config = STATUS_CONFIG[status];
+                const columnLeads = filteredLeads.filter((sl) => sl.lead.status === status);
+                return (
+                  <div
+                    key={status}
+                    className="flex w-64 shrink-0 flex-col rounded-xl border bg-muted/40"
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedLeadId) {
+                        const lead = allLeads.find((l) => l.id === draggedLeadId);
+                        if (lead && lead.status !== status) handleStatusChange(lead, status);
+                        setDraggedLeadId(null);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between px-3 py-2.5 border-b">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{config.label}</span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{columnLeads.length}</span>
+                    </div>
+                    <div className="flex flex-col gap-2 p-2 overflow-y-auto max-h-[calc(100vh-18rem)]">
+                      {columnLeads.map(({ lead, score, temperature }) => (
+                        <div
+                          key={lead.id}
+                          draggable
+                          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedLeadId(lead.id); }}
+                          onDragEnd={() => setDraggedLeadId(null)}
+                          className="rounded-lg border bg-card p-3 space-y-2 cursor-grab active:cursor-grabbing hover:shadow-sm transition-shadow"
+                          onClick={() => { setSelectedLeadId(lead.id); setDrawerOpen(true); }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{lead.first_name} {lead.last_name}</p>
+                              {lead.company_name && <p className="text-xs text-muted-foreground truncate">{lead.company_name}</p>}
+                            </div>
+                            <TemperatureBadge temp={temperature} />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">Score {score}</span>
+                            {lead.outreach_type && (
+                              <Badge variant="outline" className="text-[10px] px-1.5">
+                                {OUTREACH_TYPE_LABELS[lead.outreach_type] || lead.outreach_type}
+                              </Badge>
+                            )}
+                          </div>
+                          {lead.linkedin_url && (
+                            <a
+                              href={lead.linkedin_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Profil LinkedIn
+                            </a>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <span className="text-xs font-medium text-muted-foreground">{score}</span>
-                      </TableCell>
-                      {showSetterUI && (
-                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                          {teammateLabel(teammateMap.get((lead as any).setter_id || lead.owner_id))}
-                        </TableCell>
+                      ))}
+                      {columnLeads.length === 0 && (
+                        <p className="py-4 text-center text-xs text-muted-foreground">Aucun lead</p>
                       )}
-                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{format(new Date(lead.created_at), 'dd/MM/yy')}</TableCell>
-                      <TableCell className="hidden lg:table-cell" onClick={(e) => e.stopPropagation()}>
-                        {lead.linkedin_url && (
-                          <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <CreateLeadModal open={createOpen} onOpenChange={setCreateOpen} onSubmit={async (data) => { await createLead.mutateAsync(data); }} />

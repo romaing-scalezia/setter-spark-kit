@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Link2, CheckCheck } from 'lucide-react';
+import { Loader2, Send, Link2, CheckCheck, User, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +22,11 @@ import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
 import { useAttendeeName } from '@/hooks/useAttendeeNames';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
+import { StatusBadge } from '@/components/StatusBadge';
+import { StatusDropdown } from '@/components/StatusDropdown';
+import { type Lead, type LeadStatus } from '@/lib/constants';
+import { TEMPERATURE_CONFIG, type LeadTemperature } from '@/lib/leadScoring';
 
 function getAttendeeProviderId(c: UnipileConversation): string | null {
   const r = c.raw ?? {};
@@ -55,24 +61,30 @@ function ConversationRow({
   conversation,
   active,
   onSelect,
+  linkedTemp,
 }: {
   conversation: UnipileConversation;
   active: boolean;
   onSelect: () => void;
+  linkedTemp?: LeadTemperature;
 }) {
   const { name, avatarUrl } = useConversationDisplay(conversation);
   const unread = Number((conversation.raw as any)?.unread_count ?? 0);
+  const emoji = linkedTemp ? TEMPERATURE_CONFIG[linkedTemp].emoji : null;
   return (
     <button
       onClick={onSelect}
       className={`flex w-full items-center gap-3 p-3 text-left hover:bg-muted/60 ${
-        active ? 'bg-muted' : ''
+        active ? 'bg-primary/5 border-l-2 border-primary' : ''
       }`}
     >
       <Avatar name={name} url={avatarUrl} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-sm font-medium">{name}</p>
+          <p className={`truncate text-sm ${unread > 0 ? 'font-semibold' : 'font-medium'}`}>
+            {emoji && <span className="mr-1 text-xs">{emoji}</span>}
+            {name}
+          </p>
           <div className="flex shrink-0 items-center gap-1.5">
             <span className="text-[10px] text-muted-foreground">
               {formatTs(conversation.timestamp)}
@@ -174,17 +186,54 @@ function formatTs(ts: string | null) {
   }
 }
 
+function tempFromScore(score: number): LeadTemperature {
+  if (score >= 50) return 'hot';
+  if (score >= 25) return 'warm';
+  return 'cold';
+}
+
 function useLinkedLead(chatId: string | null) {
   return useQuery({
     queryKey: ['linked-lead', chatId],
     enabled: !!chatId,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
-        .select('id, first_name, last_name')
+        .select('id, first_name, last_name, status, score')
         .eq('unipile_chat_id', chatId)
         .maybeSingle();
       if (error) throw error;
-      return data as { id: string; first_name: string | null; last_name: string | null } | null;
+      return data as { id: string; first_name: string | null; last_name: string | null; status: LeadStatus; score: number } | null;
+    },
+  });
+}
+
+function useAllLinkedLeads(chatIds: string[]) {
+  return useQuery({
+    queryKey: ['all-linked-leads', chatIds.join(',')],
+    enabled: chatIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from('leads') as any)
+        .select('id, score, unipile_chat_id')
+        .in('unipile_chat_id', chatIds);
+      if (error) throw error;
+      const map: Record<string, { score: number }> = {};
+      for (const l of data ?? []) map[l.unipile_chat_id] = l;
+      return map;
+    },
+  });
+}
+
+function useFullLead(leadId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['full-lead', leadId],
+    enabled: !!leadId && enabled,
+    queryFn: async () => {
+      const { data, error } = await (supabase.from('leads') as any)
+        .select('*')
+        .eq('id', leadId)
+        .single();
+      if (error) throw error;
+      return data as Lead;
     },
   });
 }
@@ -199,6 +248,9 @@ export default function Inbox() {
   const [sending, setSending] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'hot' | 'followup'>('all');
+  const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
   // Redirect guard
@@ -240,6 +292,32 @@ export default function Inbox() {
     [conversations],
   );
 
+  const chatIds = useMemo(() => sortedConvos.map((c) => c.id), [sortedConvos]);
+  const { data: allLinkedLeads = {} } = useAllLinkedLeads(chatIds);
+
+  const filteredConvos = useMemo(() => {
+    let list = sortedConvos;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((c) => (c.name ?? '').toLowerCase().includes(q));
+    }
+    if (activeFilter === 'unread') list = list.filter((c) => Number((c.raw as any)?.unread_count ?? 0) > 0);
+    if (activeFilter === 'hot') list = list.filter((c) => {
+      const l = allLinkedLeads[c.id];
+      return l && tempFromScore(l.score) === 'hot';
+    });
+    return list;
+  }, [sortedConvos, search, activeFilter, allLinkedLeads]);
+
+  const { data: fullLead } = useFullLead(linkedLead?.id ?? null, drawerOpen);
+
+  const handleStatusChange = async (status: LeadStatus) => {
+    if (!linkedLead) return;
+    await (supabase.from('leads') as any).update({ status }).eq('id', linkedLead.id);
+    queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
+    queryClient.invalidateQueries({ queryKey: ['leads'] });
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected || !text.trim()) return;
@@ -278,11 +356,35 @@ export default function Inbox() {
       <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[360px_1fr] min-h-0">
         {/* Left — Conversations */}
         <aside className="flex flex-col border-r min-h-0">
-          <div className="flex items-center justify-between border-b p-4">
-            <h1 className="text-base font-semibold">Inbox</h1>
-            <span className="text-xs text-muted-foreground">
-              {sortedConvos.length}
-            </span>
+          <div className="border-b p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-base font-semibold">Inbox</h1>
+              <span className="text-xs text-muted-foreground">{filteredConvos.length}</span>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                className="pl-8 h-8 text-sm bg-muted/50"
+                placeholder="Rechercher…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {(['all', 'unread', 'hot', 'followup'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setActiveFilter(f)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    activeFilter === f
+                      ? 'bg-foreground text-background'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {f === 'all' ? 'Tous' : f === 'unread' ? 'Non lus' : f === 'hot' ? '🔥 Chauds' : 'À relancer'}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="min-w-0 flex-1 overflow-y-auto">
             {convosLoading ? (
@@ -291,20 +393,22 @@ export default function Inbox() {
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : sortedConvos.length === 0 ? (
+            ) : filteredConvos.length === 0 ? (
               <p className="p-6 text-center text-sm text-muted-foreground">
                 Aucune conversation.
               </p>
             ) : (
               <ul className="divide-y">
-                {sortedConvos.map((c) => {
+                {filteredConvos.map((c) => {
                   const active = selected?.id === c.id;
+                  const ll = allLinkedLeads[c.id];
                   return (
                     <li key={c.id}>
                       <ConversationRow
                         conversation={c}
                         active={active}
                         onSelect={() => setSelected(c)}
+                        linkedTemp={ll ? tempFromScore(ll.score) : undefined}
                       />
                     </li>
                   );
@@ -340,42 +444,47 @@ export default function Inbox() {
             </div>
           ) : (
             <>
-              <header className="flex items-center justify-between border-b p-4">
-                <div className="flex items-center gap-3">
+              <header className="flex items-center justify-between border-b p-4 gap-4">
+                <div className="flex items-center gap-3 min-w-0">
                   <ConversationHeaderAvatar conversation={selected} />
-                  <div>
+                  <div className="min-w-0">
                     <ConversationHeaderName conversation={selected} />
-                    <p className="text-xs text-muted-foreground">
-                      {formatTs(selected.timestamp)}
-                    </p>
+                    {linkedLead ? (
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs">{TEMPERATURE_CONFIG[tempFromScore(linkedLead.score)].emoji}</span>
+                        <StatusBadge status={linkedLead.status} />
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                          Score {linkedLead.score}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{formatTs(selected.timestamp)}</p>
+                    )}
                   </div>
                 </div>
-                {linkedLead ? (
-                  <Link
-                    to="/leads"
-                    className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20"
-                  >
-                    <Link2 className="h-3 w-3" />
-                    {(linkedLead.first_name ?? '') + ' ' + (linkedLead.last_name ?? '')}
-                  </Link>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setLinkOpen(true)}
-                    >
-                      <Link2 className="mr-2 h-3.5 w-3.5" />
-                      Lier à un lead
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => setCreateOpen(true)}
-                    >
-                      Créer un lead
-                    </Button>
-                  </div>
-                )}
+                <div className="flex shrink-0 items-center gap-2">
+                  {linkedLead ? (
+                    <>
+                      <Button size="sm" onClick={() => navigate('/leads')}>
+                        Booker un RDV
+                      </Button>
+                      <StatusDropdown value={linkedLead.status} onValueChange={handleStatusChange} />
+                      <Button size="sm" variant="outline" className="px-2" onClick={() => setDrawerOpen(true)}>
+                        <User className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => setLinkOpen(true)}>
+                        <Link2 className="mr-2 h-3.5 w-3.5" />
+                        Lier à un lead
+                      </Button>
+                      <Button size="sm" onClick={() => setCreateOpen(true)}>
+                        Créer un lead
+                      </Button>
+                    </>
+                  )}
+                </div>
               </header>
 
               <ScrollArea className="flex-1 p-4">
@@ -429,21 +538,39 @@ export default function Inbox() {
                 )}
               </ScrollArea>
 
-              <form onSubmit={handleSend} className="flex items-center gap-2 border-t p-3">
-                <Input
-                  placeholder="Votre message..."
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  disabled={sending}
-                />
-                <Button type="submit" disabled={sending || !text.trim()}>
-                  {sending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
-              </form>
+              <div className="border-t">
+                <div className="flex items-center gap-2 overflow-x-auto px-3 pt-2 pb-1">
+                  <span className="shrink-0 text-xs text-muted-foreground">✦ Suggestions</span>
+                  {['Proposer un créneau', 'Répondre chaleureusement', 'Template : Closing'].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setText(s)}
+                      className="shrink-0 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <form onSubmit={handleSend} className="flex items-end gap-2 p-3 pt-1">
+                  <Textarea
+                    placeholder="Votre message..."
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    disabled={sending}
+                    rows={1}
+                    className="max-h-[120px] resize-none"
+                    onInput={(e) => {
+                      const el = e.currentTarget;
+                      el.style.height = 'auto';
+                      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                    }}
+                  />
+                  <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={sending || !text.trim()}>
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </form>
+              </div>
             </>
           )}
         </section>
@@ -459,6 +586,14 @@ export default function Inbox() {
             refetchLinked();
             queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
           }}
+        />
+      )}
+
+      {selected && linkedLead && (
+        <LeadDetailDrawer
+          lead={fullLead ?? null}
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
         />
       )}
 

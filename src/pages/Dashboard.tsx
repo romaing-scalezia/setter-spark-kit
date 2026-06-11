@@ -265,7 +265,7 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-foreground">
                 Bonjour, {profile?.full_name || 'Setter'} 👋
               </h1>
-              <p className="text-muted-foreground">Votre tableau de bord</p>
+              <p className="text-muted-foreground">Votre journée en focus</p>
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={() => setCreateLeadOpen(true)} size="sm" data-testid="dashboard-new-lead">
@@ -306,6 +306,46 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Bandeau Score / série */}
+        <div className="relative">
+          <Button variant="ghost" size="icon" className="absolute top-3 right-3 z-10 h-7 w-7" onClick={() => setScoreInfoOpen(true)}>
+            <Info className="h-4 w-4 text-muted-foreground" />
+          </Button>
+          <ScoreCard totalScore={gamification.totalScore} todayScore={gamification.todayScore} weekScore={gamification.weekScore} level={gamification.level} streak={gamification.streak} />
+        </div>
+
+        {/* Ta prochaine action */}
+        {priorityActions.length > 0 && (() => {
+          const pa = priorityActions[0];
+          return (
+            <Card className={`border-l-4 ${PRIORITY_CONFIG[pa.level].className}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Ta prochaine action
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PRIORITY_CONFIG[pa.level].dotClassName}`} />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground">
+                      {pa.lead.first_name} {pa.lead.last_name}
+                      {pa.lead.company_name && <span className="ml-1.5 text-sm font-normal text-muted-foreground">— {pa.lead.company_name}</span>}
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate">{pa.reason}</p>
+                  </div>
+                </div>
+                <Link to="/leads" className="shrink-0">
+                  <Button size="sm">
+                    {pa.action}
+                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* KPIs */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
           <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} />
@@ -314,28 +354,143 @@ export default function Dashboard() {
           <KpiCard title="RDV bookés" value={rdvBookedCount} icon={<CalendarCheck className="h-4 w-4" />} />
         </div>
 
-        {/* Conversion Rates */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Taux de conversion</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ConversionRates
-              conversations={contactedCount}
-              responses={respondedCount}
-              callsProposed={callProposedCount}
-              meetingsBooked={rdvBookedCount}
-            />
-            <MiniFunnel
-              conversations={contactedCount}
-              responses={respondedCount}
-              callsProposed={callProposedCount}
-              meetingsBooked={rdvBookedCount}
-            />
-          </CardContent>
-        </Card>
+        {/* Conversion + CA */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Taux de conversion</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ConversionRates
+                conversations={contactedCount}
+                responses={respondedCount}
+                callsProposed={callProposedCount}
+                meetingsBooked={rdvBookedCount}
+              />
+              <MiniFunnel
+                conversations={contactedCount}
+                responses={respondedCount}
+                callsProposed={callProposedCount}
+                meetingsBooked={rdvBookedCount}
+              />
+            </CardContent>
+          </Card>
 
-        {/* Outreach Format Comparison */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-primary" />
+                Chiffre d'affaires
+              </CardTitle>
+              {rdvLeads.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setDealOpen(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Deal
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <p className="text-2xl font-bold text-foreground">{totalRevenue.toLocaleString('fr-FR')}€</p>
+                  <p className="text-xs text-muted-foreground">CA total</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-muted/50">
+                  <p className="text-2xl font-bold text-foreground">{filteredDeals.filter((d: any) => d.status === 'won').length}</p>
+                  <p className="text-xs text-muted-foreground">Clients</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Alertes */}
+        {userAlerts.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                Alertes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {userAlerts.map((alert) => (
+                <Link
+                  key={alert.key}
+                  to={alertRoute(alert)}
+                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${
+                    alert.severity === 'high' ? 'border-destructive/30 bg-destructive/5' :
+                    alert.severity === 'medium' ? 'border-amber-300/50 bg-amber-50/50' :
+                    'border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                      alert.severity === 'high' ? 'bg-destructive' :
+                      alert.severity === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground'
+                    }`} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                      <p className="text-xs text-muted-foreground">{alert.description}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-primary font-medium shrink-0 ml-2">{alert.action} →</span>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Today's Actions */}
+        <TodaysActionsCard />
+
+        {/* Per-setter breakdown (team accounts only) */}
+        {isTeam && (
+          <SetterBreakdownCard leads={filteredLeads} teammates={teammates} inPeriod={inPeriod} />
+        )}
+
+        {/* Actions prioritaires (suite) */}
+        {priorityActions.length > 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Actions prioritaires
+                <Badge variant="secondary" className="text-xs ml-1">{priorityActions.length - 1}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {priorityActions.slice(1, 8).map((pa, i) => (
+                <Link
+                  key={`${pa.lead.id}-${i}`}
+                  to="/leads"
+                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${PRIORITY_CONFIG[pa.level].className}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${PRIORITY_CONFIG[pa.level].dotClassName}`} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground">{pa.lead.first_name} {pa.lead.last_name}</p>
+                        {pa.lead.company_name && <span className="text-xs text-muted-foreground">— {pa.lead.company_name}</span>}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{pa.reason}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-medium text-primary">{pa.action}</span>
+                    <ArrowRight className="h-3 w-3 text-primary" />
+                  </div>
+                </Link>
+              ))}
+              {priorityActions.length > 9 && (
+                <Link to="/leads" className="block text-center text-sm text-primary hover:underline py-1">
+                  Voir les {priorityActions.length - 9} autres actions →
+                </Link>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Performance par format d'approche */}
         {Object.values(outreachComparison).some((d) => d.contacted > 0) && (
           <Card>
             <CardHeader>
@@ -378,128 +533,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
-
-        {userAlerts.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                Alertes
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {userAlerts.map((alert) => (
-                <Link
-                  key={alert.key}
-                  to={alertRoute(alert)}
-                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${
-                    alert.severity === 'high' ? 'border-destructive/30 bg-destructive/5' :
-                    alert.severity === 'medium' ? 'border-amber-300/50 bg-amber-50/50' :
-                    'border-border'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
-                      alert.severity === 'high' ? 'bg-destructive' :
-                      alert.severity === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground'
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                      <p className="text-xs text-muted-foreground">{alert.description}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-primary font-medium shrink-0 ml-2">{alert.action} →</span>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Today's Actions (smart task engine) */}
-        <TodaysActionsCard />
-
-        {/* Per-setter breakdown (team accounts only) */}
-        {isTeam && (
-          <SetterBreakdownCard leads={filteredLeads} teammates={teammates} inPeriod={inPeriod} />
-        )}
-
-        {/* Priority Actions */}
-        {priorityActions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                Actions prioritaires
-                <Badge variant="secondary" className="text-xs ml-1">{priorityActions.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {priorityActions.slice(0, 8).map((pa, i) => (
-                <Link
-                  key={`${pa.lead.id}-${i}`}
-                  to="/leads"
-                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${PRIORITY_CONFIG[pa.level].className}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${PRIORITY_CONFIG[pa.level].dotClassName}`} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{pa.lead.first_name} {pa.lead.last_name}</p>
-                        {pa.lead.company_name && <span className="text-xs text-muted-foreground">— {pa.lead.company_name}</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{pa.reason}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-medium text-primary">{pa.action}</span>
-                    <ArrowRight className="h-3 w-3 text-primary" />
-                  </div>
-                </Link>
-              ))}
-              {priorityActions.length > 8 && (
-                <Link to="/leads" className="block text-center text-sm text-primary hover:underline py-1">
-                  Voir les {priorityActions.length - 8} autres actions →
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Score + Revenue */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="relative">
-            <Button variant="ghost" size="icon" className="absolute top-3 right-3 z-10 h-7 w-7" onClick={() => setScoreInfoOpen(true)}>
-              <Info className="h-4 w-4 text-muted-foreground" />
-            </Button>
-            <ScoreCard totalScore={gamification.totalScore} todayScore={gamification.todayScore} weekScore={gamification.weekScore} level={gamification.level} streak={gamification.streak} />
-          </div>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-primary" />
-                Chiffre d'affaires
-              </CardTitle>
-              {rdvLeads.length > 0 && (
-                <Button size="sm" variant="outline" onClick={() => setDealOpen(true)}>
-                  <Plus className="h-4 w-4 mr-1" /> Deal
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 rounded-lg bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{totalRevenue.toLocaleString('fr-FR')}€</p>
-                  <p className="text-xs text-muted-foreground">CA total</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{filteredDeals.filter((d: any) => d.status === 'won').length}</p>
-                  <p className="text-xs text-muted-foreground">Clients</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Performance par cible */}
         {personaStats.length > 0 && (

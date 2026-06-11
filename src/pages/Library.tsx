@@ -26,7 +26,7 @@ type ScriptCategory = {
   created_at: string;
 };
 
-export default function Library() {
+export function LibraryContent() {
   const { user, activeRole } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -370,7 +370,7 @@ export default function Library() {
   );
 
   return (
-    <AppLayout>
+    <>
       <div className="p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -614,6 +614,10 @@ export default function Library() {
           </div>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
+}
+
+export default function Library() {
+  return <AppLayout><LibraryContent /></AppLayout>;
 }

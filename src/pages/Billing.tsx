@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Shield } from 'lucide-react';
 
-export default function BillingPage() {
+export function BillingContent() {
   const { user } = useAuth();
   const [membership, setMembership] = useState<{ plan: string; status: string } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,9 +25,8 @@ export default function BillingPage() {
   }, [user]);
 
   return (
-    <AppLayout>
-      <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
-        <h1 className="text-2xl font-bold text-foreground">Abonnement</h1>
+    <>
+      <div className="space-y-6 max-w-3xl">
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -62,6 +61,10 @@ export default function BillingPage() {
           </Card>
         )}
       </div>
-    </AppLayout>
+    </>
   );
+}
+
+export default function BillingPage() {
+  return <AppLayout><div className="p-4 sm:p-6"><BillingContent /></div></AppLayout>;
 }

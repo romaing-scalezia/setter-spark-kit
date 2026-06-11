@@ -22,13 +22,13 @@ export type SourceType = Database['public']['Enums']['source_type_enum'];
 
 // Status labels & colors
 export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bg: string }> = {
-  conversation_engagee: { label: 'Conversation engagée', color: 'text-blue-700', bg: 'bg-blue-100' },
-  en_cours: { label: 'En cours', color: 'text-amber-700', bg: 'bg-amber-100' },
-  appel_propose: { label: 'Appel proposé', color: 'text-purple-700', bg: 'bg-purple-100' },
-  follow_up: { label: 'Follow-up', color: 'text-orange-700', bg: 'bg-orange-100' },
-  rendez_vous_booke: { label: 'RDV booké', color: 'text-green-700', bg: 'bg-green-100' },
-  ferme_perdu: { label: 'Fermé perdu', color: 'text-red-700', bg: 'bg-red-100' },
-  non_qualifie: { label: 'Non qualifié', color: 'text-gray-700', bg: 'bg-gray-100' },
+  conversation_engagee: { label: 'Conversation engagée', color: 'text-primary', bg: 'bg-primary/10' },
+  en_cours: { label: 'En cours', color: 'text-primary', bg: 'bg-primary/10' },
+  appel_propose: { label: 'Appel proposé', color: 'text-primary', bg: 'bg-primary/10' },
+  follow_up: { label: 'Follow-up', color: 'text-warning', bg: 'bg-warning/10' },
+  rendez_vous_booke: { label: 'RDV booké', color: 'text-success', bg: 'bg-success/10' },
+  ferme_perdu: { label: 'Fermé perdu', color: 'text-destructive', bg: 'bg-destructive/10' },
+  non_qualifie: { label: 'Non qualifié', color: 'text-muted-foreground', bg: 'bg-muted' },
 };
 
 export const LOSS_REASONS: Record<LossReason, string> = {

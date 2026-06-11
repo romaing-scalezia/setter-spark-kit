@@ -222,7 +222,7 @@ export function PersonaDetailView({ persona }: { persona: Persona }) {
   );
 }
 
-export default function PersonasPage() {
+export function PersonasContent() {
   const { user, activeRole } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -441,7 +441,7 @@ export default function PersonasPage() {
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -580,6 +580,10 @@ export default function PersonasPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
+}
+
+export default function PersonasPage() {
+  return <AppLayout><PersonasContent /></AppLayout>;
 }

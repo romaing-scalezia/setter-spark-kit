@@ -15,7 +15,7 @@ interface Workspace { id: string; name: string; owner_id: string }
 interface Member { workspace_id: string; user_id: string; role: string }
 interface Profile { id: string; full_name: string | null; email: string | null }
 
-export default function WorkspacePage() {
+export function WorkspaceContent() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [newName, setNewName] = useState('');
@@ -127,8 +127,8 @@ export default function WorkspacePage() {
   const profileMap = new Map(profiles.map((p) => [p.id, p]));
 
   return (
-    <AppLayout>
-      <div className="p-4 sm:p-6 space-y-6 max-w-4xl">
+    <>
+      <div className="space-y-6 max-w-4xl">
         <div className="flex items-center gap-3">
           <div className="rounded-md bg-primary/10 p-2"><Users className="h-5 w-5 text-primary" /></div>
           <div>
@@ -233,6 +233,10 @@ export default function WorkspacePage() {
           </>
         )}
       </div>
-    </AppLayout>
+    </>
   );
+}
+
+export default function WorkspacePage() {
+  return <AppLayout><div className="p-4 sm:p-6"><WorkspaceContent /></div></AppLayout>;
 }
