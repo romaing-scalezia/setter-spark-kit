@@ -37,6 +37,14 @@ function normalize(item: any): UnipileConversation {
   };
 }
 
+function sortByRecent(items: UnipileConversation[]): UnipileConversation[] {
+  return [...items].sort((a, b) => {
+    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return tb - ta;
+  });
+}
+
 async function fetchPage(account_id: string, cursor: string | null) {
   const body: Record<string, any> = { action: 'get_conversations', account_id };
   if (cursor) body.cursor = cursor;
@@ -47,7 +55,7 @@ async function fetchPage(account_id: string, cursor: string | null) {
     (data as any)?.chats ??
     (data as any)?.data ??
     (Array.isArray(data) ? (data as any) : []);
-  const items = rawItems.map(normalize).filter((c) => c.id);
+  const items = sortByRecent(rawItems.map(normalize).filter((c) => c.id));
   const nextCursor: string | null =
     (data as any)?.cursor ??
     (data as any)?.next_cursor ??
@@ -97,7 +105,7 @@ export function useUnipileConversations(account_id: string | null | undefined) {
         for (const it of items) {
           if (!seen.has(it.id)) merged.push(it);
         }
-        return merged;
+        return sortByRecent(merged);
       });
       setCursor(nextCursor);
     } finally {
