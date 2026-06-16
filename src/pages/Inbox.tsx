@@ -273,7 +273,7 @@ export default function Inbox() {
   } = useUnipileConversations(account?.account_id ?? null);
   const { messages, loading: msgsLoading, refetch: refetchMessages } =
     useUnipileMessages(selected?.id ?? null);
-  const { data: linkedLead, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
+  const { data: linkedLead, isLoading: linkedLeadLoading, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
 
   const selectedAttendeeId = selected ? getAttendeeProviderId(selected) : null;
   const {
@@ -463,7 +463,9 @@ export default function Inbox() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {linkedLead ? (
+                  {linkedLeadLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : linkedLead ? (
                     <>
                       <Button size="sm" onClick={() => navigate('/leads')}>
                         Booker un RDV

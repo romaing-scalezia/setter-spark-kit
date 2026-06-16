@@ -26,6 +26,9 @@ import SettingsPage from "./pages/Settings";
 import WorkspacePage from "./pages/Workspace";
 import LeaderboardPage from "./pages/Leaderboard";
 import BillingPage from "./pages/Billing";
+import Campaigns from "./pages/Campaigns";
+import CampaignNew from "./pages/CampaignNew";
+import CampaignDetail from "./pages/CampaignDetail";
 import Onboarding from "./pages/Onboarding";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -80,6 +83,9 @@ const App = () => (
             <Route path="/dashboard" element={<OnboardingGuard><AuthGuard><Dashboard /></AuthGuard></OnboardingGuard>} />
             <Route path="/leads" element={<OnboardingGuard><AuthGuard><Leads /></AuthGuard></OnboardingGuard>} />
             <Route path="/follow-ups" element={<OnboardingGuard><AuthGuard><FollowUps /></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns" element={<OnboardingGuard><AuthGuard><Campaigns /></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns/new" element={<OnboardingGuard><AuthGuard><CampaignNew /></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns/:id" element={<OnboardingGuard><AuthGuard><CampaignDetail /></AuthGuard></OnboardingGuard>} />
             <Route path="/inbox" element={<OnboardingGuard><AuthGuard><Inbox /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach/students/:id" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachStudentPage /></AuthGuard></OnboardingGuard>} />
