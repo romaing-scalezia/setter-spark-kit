@@ -8,20 +8,12 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaignDetail } from '@/hooks/useCampaignDetail';
 import type { CampaignStatus, CampaignLead } from '@/hooks/useCampaignDetail';
-
-const STATUS_LABELS: Record<CampaignStatus, string> = {
-  draft:     'Brouillon',
-  active:    'Active',
-  paused:    'En pause',
-  completed: 'Terminée',
-};
-
-const STATUS_STYLES: Record<CampaignStatus, string> = {
-  draft:     'bg-gray-50 text-gray-600 border-gray-200',
-  active:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  paused:    'bg-amber-50 text-amber-700 border-amber-200',
-  completed: 'bg-primary/10 text-primary border-primary/20',
-};
+import {
+  CAMPAIGN_STATUS_LABELS,
+  CAMPAIGN_STATUS_STYLES,
+  CAMPAIGN_LEAD_STATUS_STYLES,
+  CAMPAIGN_LEAD_STATUS_LABELS,
+} from '@/lib/constants';
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -93,8 +85,8 @@ export default function CampaignDetail() {
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
                 <h1 className="text-2xl font-bold text-foreground">{detail.name}</h1>
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[detail.status]}`}>
-                  {STATUS_LABELS[detail.status]}
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${CAMPAIGN_STATUS_STYLES[detail.status]}`}>
+                  {CAMPAIGN_STATUS_LABELS[detail.status]}
                 </span>
                 <Badge variant="outline" className="font-mono text-xs">
                   Scénario {detail.scenario_type}
@@ -197,27 +189,22 @@ export default function CampaignDetail() {
                         <span className="text-sm text-muted-foreground">{lead.company_name || '—'}</span>
                       </TableCell>
                       <TableCell>
-                        {lead.error_message ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-destructive/10 text-destructive border border-destructive/20">
-                            Erreur
-                          </span>
-                        ) : lead.messaged_1_at ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20">
-                            Messagé
-                          </span>
-                        ) : lead.accepted_at ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            Accepté
-                          </span>
-                        ) : lead.invited_at ? (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            Invité
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-gray-50 text-gray-600 border border-gray-200">
-                            En attente
-                          </span>
-                        )}
+                        {(() => {
+                          const key = lead.error_message
+                            ? 'error'
+                            : lead.messaged_1_at
+                            ? 'done'
+                            : lead.accepted_at
+                            ? 'accepted'
+                            : lead.invited_at
+                            ? 'invited'
+                            : 'pending';
+                          return (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${CAMPAIGN_LEAD_STATUS_STYLES[key]}`}>
+                              {CAMPAIGN_LEAD_STATUS_LABELS[key]}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">{formatDate(lead.invited_at)}</span>

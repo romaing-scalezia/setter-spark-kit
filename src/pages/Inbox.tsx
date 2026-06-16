@@ -196,6 +196,7 @@ function useLinkedLead(chatId: string | null) {
   return useQuery({
     queryKey: ['linked-lead', chatId],
     enabled: !!chatId,
+    staleTime: Infinity,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
         .select('id, first_name, last_name, status, score')
@@ -273,7 +274,7 @@ export default function Inbox() {
   } = useUnipileConversations(account?.account_id ?? null);
   const { messages, loading: msgsLoading, refetch: refetchMessages } =
     useUnipileMessages(selected?.id ?? null);
-  const { data: linkedLead, isLoading: linkedLeadLoading, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
+  const { data: linkedLead, isFetching: linkedLeadLoading, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
 
   const selectedAttendeeId = selected ? getAttendeeProviderId(selected) : null;
   const {

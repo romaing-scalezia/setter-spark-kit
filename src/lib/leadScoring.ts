@@ -334,9 +334,9 @@ export function getCoachStudentAlerts(stats: {
 
 // ── Temperature display helpers ──────────────────────────
 export const TEMPERATURE_CONFIG: Record<LeadTemperature, { label: string; emoji: string; className: string }> = {
-  hot: { label: 'Chaud', emoji: '🔥', className: 'bg-red-100 text-red-800 border-red-200' },
-  warm: { label: 'Tiède', emoji: '🟡', className: 'bg-amber-100 text-amber-800 border-amber-200' },
-  cold: { label: 'Froid', emoji: '❄️', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  hot:  { label: 'Chaud', emoji: '🔥', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  warm: { label: 'Tiède', emoji: '🟡', className: 'bg-warning/10 text-warning border-warning/20' },
+  cold: { label: 'Froid', emoji: '❄️', className: 'bg-muted text-muted-foreground border-border' },
 };
 
 export const PRIORITY_CONFIG: Record<PriorityLevel, { label: string; className: string; dotClassName: string }> = {

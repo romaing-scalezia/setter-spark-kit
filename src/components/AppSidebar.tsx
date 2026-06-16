@@ -217,7 +217,7 @@ export function AppSidebar() {
       `}</style>
 
       <Sidebar
-        collapsible="icon"
+        collapsible="none"
         style={{ '--sidebar-width': '232px' } as React.CSSProperties}
       >
         <SidebarHeader style={{ padding: '16px 12px 0' }}>

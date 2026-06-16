@@ -14,20 +14,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import type { CampaignStatus } from '@/hooks/useCampaigns';
-
-const STATUS_LABELS: Record<CampaignStatus, string> = {
-  draft: 'Brouillon',
-  active: 'Active',
-  paused: 'En pause',
-  completed: 'Terminée',
-};
-
-const STATUS_STYLES: Record<CampaignStatus, string> = {
-  draft:     'bg-gray-50 text-gray-600 border border-gray-200',
-  active:    'bg-emerald-50 text-emerald-700 border border-emerald-200',
-  paused:    'bg-amber-50 text-amber-700 border border-amber-200',
-  completed: 'bg-primary/10 text-primary border border-primary/20',
-};
+import { CAMPAIGN_STATUS_LABELS, CAMPAIGN_STATUS_STYLES } from '@/lib/constants';
 
 export default function Campaigns() {
   const navigate = useNavigate();
@@ -162,9 +149,9 @@ export default function Campaigns() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-foreground">{campaign.name}</span>
                         <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[campaign.status]}`}
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${CAMPAIGN_STATUS_STYLES[campaign.status]}`}
                         >
-                          {STATUS_LABELS[campaign.status]}
+                          {CAMPAIGN_STATUS_LABELS[campaign.status]}
                         </span>
                       </div>
                     </TableCell>

@@ -95,6 +95,40 @@ export const FUNNEL_STATUSES: LeadStatus[] = [
   'rendez_vous_booke',
 ];
 
+// Campaign statuses
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed';
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  draft:     'Brouillon',
+  active:    'Active',
+  paused:    'En pause',
+  completed: 'Terminée',
+};
+
+export const CAMPAIGN_STATUS_STYLES: Record<CampaignStatus, string> = {
+  active:    'bg-success/10 text-success border-success/20',
+  paused:    'bg-warning/10 text-warning border-warning/20',
+  draft:     'bg-muted text-muted-foreground border-border',
+  completed: 'bg-primary/10 text-primary border-primary/20',
+};
+
+// Campaign lead status chips
+export const CAMPAIGN_LEAD_STATUS_STYLES = {
+  done:     'bg-primary/10 text-primary border-primary/20',
+  accepted: 'bg-success/10 text-success border-success/20',
+  invited:  'bg-warning/10 text-warning border-warning/20',
+  error:    'bg-destructive/10 text-destructive border-destructive/20',
+  pending:  'bg-muted text-muted-foreground border-border',
+} as const;
+
+export const CAMPAIGN_LEAD_STATUS_LABELS = {
+  done:     'Messagé',
+  accepted: 'Accepté',
+  invited:  'Invité',
+  error:    'Erreur',
+  pending:  'En attente',
+} as const;
+
 // Score weights labels for UI explanation
 export const SCORE_WEIGHTS_LABELS = [
   { label: 'Conversation engagée', points: 1 },
