@@ -26,7 +26,6 @@ import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { type Lead, type LeadStatus } from '@/lib/constants';
-import { TEMPERATURE_CONFIG, type LeadTemperature } from '@/lib/leadScoring';
 
 function getAttendeeProviderId(c: UnipileConversation): string | null {
   const r = c.raw ?? {};
@@ -61,18 +60,17 @@ function ConversationRow({
   conversation,
   active,
   onSelect,
-  linkedTemp,
+  isLinked,
   isRead,
 }: {
   conversation: UnipileConversation;
   active: boolean;
   onSelect: () => void;
-  linkedTemp?: LeadTemperature;
+  isLinked?: boolean;
   isRead?: boolean;
 }) {
   const { name, avatarUrl } = useConversationDisplay(conversation);
   const unread = isRead ? 0 : Number((conversation.raw as any)?.unread_count ?? 0);
-  const emoji = linkedTemp ? TEMPERATURE_CONFIG[linkedTemp].emoji : null;
   return (
     <button
       onClick={onSelect}
@@ -84,7 +82,7 @@ function ConversationRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className={`truncate text-sm ${unread > 0 ? 'font-semibold' : 'font-medium'}`}>
-            {emoji && <span className="mr-1 text-xs">{emoji}</span>}
+            {isLinked && <span className="mr-1 text-xs">🔗</span>}
             {name}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -188,11 +186,6 @@ function formatTs(ts: string | null) {
   }
 }
 
-function tempFromScore(score: number): LeadTemperature {
-  if (score >= 50) return 'hot';
-  if (score >= 25) return 'warm';
-  return 'cold';
-}
 
 function useLinkedLead(chatId: string | null) {
   return useQuery({
@@ -200,11 +193,11 @@ function useLinkedLead(chatId: string | null) {
     enabled: !!chatId,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
-        .select('id, first_name, last_name, status, score')
+        .select('id, first_name, last_name, status')
         .eq('unipile_chat_id', chatId)
         .maybeSingle();
       if (error) throw error;
-      return data as { id: string; first_name: string | null; last_name: string | null; status: LeadStatus; score: number } | null;
+      return data as { id: string; first_name: string | null; last_name: string | null; status: LeadStatus } | null;
     },
   });
 }
@@ -215,10 +208,10 @@ function useAllLinkedLeads(chatIds: string[]) {
     enabled: chatIds.length > 0,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
-        .select('id, score, unipile_chat_id')
+        .select('id, unipile_chat_id')
         .in('unipile_chat_id', chatIds);
       if (error) throw error;
-      const map: Record<string, { score: number }> = {};
+      const map: Record<string, { id: string }> = {};
       for (const l of data ?? []) map[l.unipile_chat_id] = l;
       return map;
     },
@@ -310,10 +303,7 @@ export default function Inbox() {
       list = list.filter((c) => (c.name ?? '').toLowerCase().includes(q));
     }
     if (activeFilter === 'unread') list = list.filter((c) => Number((c.raw as any)?.unread_count ?? 0) > 0);
-    if (activeFilter === 'hot') list = list.filter((c) => {
-      const l = allLinkedLeads[c.id];
-      return l && tempFromScore(l.score) === 'hot';
-    });
+    if (activeFilter === 'hot') list = list.filter((c) => !!allLinkedLeads[c.id]);
     return list;
   }, [sortedConvos, search, activeFilter, allLinkedLeads]);
 
@@ -416,7 +406,7 @@ export default function Inbox() {
                         conversation={c}
                         active={active}
                         onSelect={() => handleSelectConversation(c)}
-                        linkedTemp={ll ? tempFromScore(ll.score) : undefined}
+                        isLinked={!!ll}
                         isRead={readIds.has(c.id)}
                       />
                     </li>
@@ -460,11 +450,7 @@ export default function Inbox() {
                     <ConversationHeaderName conversation={selected} />
                     {linkedLead ? (
                       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs">{TEMPERATURE_CONFIG[tempFromScore(linkedLead.score)].emoji}</span>
                         <StatusBadge status={linkedLead.status} />
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                          Score {linkedLead.score}
-                        </span>
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">{formatTs(selected.timestamp)}</p>
