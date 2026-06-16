@@ -80,7 +80,7 @@ function NavItem({ item, collapsed }: { item: NavDef; collapsed: boolean }) {
       title={collapsed ? item.title : undefined}
       className={[
         'relative flex w-full items-center gap-[11px] rounded-[9px] px-[11px] py-[9px]',
-        'text-[13px] font-medium transition-colors duration-[180ms]',
+        'text-[13px] font-medium transition-colors duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5851E8]/40',
         isActive
           ? 'bg-[#EDECFD] font-semibold'

@@ -62,14 +62,16 @@ function ConversationRow({
   active,
   onSelect,
   linkedTemp,
+  isRead,
 }: {
   conversation: UnipileConversation;
   active: boolean;
   onSelect: () => void;
   linkedTemp?: LeadTemperature;
+  isRead?: boolean;
 }) {
   const { name, avatarUrl } = useConversationDisplay(conversation);
-  const unread = Number((conversation.raw as any)?.unread_count ?? 0);
+  const unread = isRead ? 0 : Number((conversation.raw as any)?.unread_count ?? 0);
   const emoji = linkedTemp ? TEMPERATURE_CONFIG[linkedTemp].emoji : null;
   return (
     <button
@@ -196,7 +198,6 @@ function useLinkedLead(chatId: string | null) {
   return useQuery({
     queryKey: ['linked-lead', chatId],
     enabled: !!chatId,
-    staleTime: Infinity,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
         .select('id, first_name, last_name, status, score')
@@ -245,6 +246,7 @@ export default function Inbox() {
   const { user } = useAuth();
   const { account, loading: accountLoading } = useUnipileAccount();
   const [selected, setSelected] = useState<UnipileConversation | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -253,6 +255,11 @@ export default function Inbox() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'hot' | 'followup'>('all');
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
+
+  const handleSelectConversation = (c: UnipileConversation) => {
+    setSelected(c);
+    setReadIds((prev) => new Set([...prev, c.id]));
+  };
 
   // Redirect guard
   useEffect(() => {
@@ -408,8 +415,9 @@ export default function Inbox() {
                       <ConversationRow
                         conversation={c}
                         active={active}
-                        onSelect={() => setSelected(c)}
+                        onSelect={() => handleSelectConversation(c)}
                         linkedTemp={ll ? tempFromScore(ll.score) : undefined}
+                        isRead={readIds.has(c.id)}
                       />
                     </li>
                   );
@@ -586,7 +594,6 @@ export default function Inbox() {
           chatId={selected.id}
           linkedinUrl={attendeeLinkedinUrl}
           onLinked={() => {
-            refetchLinked();
             queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
           }}
         />
@@ -637,8 +644,13 @@ export default function Inbox() {
               new_value: 'conversation_engagee',
             });
             toast({ title: 'Lead créé et lié à la conversation' });
-            refetchLinked();
-            queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
+            queryClient.setQueryData(['linked-lead', selected.id], {
+              id: lead.id,
+              first_name: lead.first_name ?? null,
+              last_name: lead.last_name ?? null,
+              status: lead.status,
+              score: lead.score ?? 0,
+            });
             queryClient.invalidateQueries({ queryKey: ['leads'] });
           }}
         />
