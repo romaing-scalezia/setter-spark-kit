@@ -594,6 +594,7 @@ export default function Inbox() {
           chatId={selected.id}
           linkedinUrl={attendeeLinkedinUrl}
           onLinked={() => {
+            refetchLinked();
             queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
           }}
         />
@@ -644,13 +645,8 @@ export default function Inbox() {
               new_value: 'conversation_engagee',
             });
             toast({ title: 'Lead créé et lié à la conversation' });
-            queryClient.setQueryData(['linked-lead', selected.id], {
-              id: lead.id,
-              first_name: lead.first_name ?? null,
-              last_name: lead.last_name ?? null,
-              status: lead.status,
-              score: lead.score ?? 0,
-            });
+            refetchLinked();
+            queryClient.invalidateQueries({ queryKey: ['linked-lead', selected.id] });
             queryClient.invalidateQueries({ queryKey: ['leads'] });
           }}
         />

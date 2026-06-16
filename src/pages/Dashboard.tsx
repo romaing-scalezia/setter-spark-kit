@@ -6,7 +6,7 @@ import { Navigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { KpiCard } from '@/components/KpiCard';
 import { ConversionRates, MiniFunnel } from '@/components/ConversionRates';
-import { DateRangeFilter, getDefaultDateRange, type DateRange } from '@/components/DateRangeFilter';
+import { getDefaultDateRange, type DateRange } from '@/components/DateRangeFilter';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,21 +15,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  MessageSquare, PhoneCall, CalendarCheck, Clock,
-  AlertTriangle, DollarSign, Plus, Info, ArrowRight, Target, Video, PenLine
+  MessageSquare, PhoneCall, CalendarCheck,
+  DollarSign, Plus, Info, ArrowRight, Target,
 } from 'lucide-react';
-import { isWithinInterval } from 'date-fns';
+import { isWithinInterval, startOfWeek, endOfWeek, format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useGamification } from '@/hooks/useGamification';
 import { ScoreCard } from '@/components/gamification/ScoreCard';
 import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Lead, LeadStatus, OutreachType } from '@/lib/constants';
-import { SCORE_WEIGHTS_LABELS, OUTREACH_TYPE_LABELS } from '@/lib/constants';
-import { getPriorityActions, getUserAlerts, PRIORITY_CONFIG, type UserAlert } from '@/lib/leadScoring';
-import { TodaysActionsCard } from '@/components/TodaysActionsCard';
+import type { Lead, LeadStatus } from '@/lib/constants';
+import { SCORE_WEIGHTS_LABELS } from '@/lib/constants';
+import { getPriorityActions, PRIORITY_CONFIG } from '@/lib/leadScoring';
 import { SetterBreakdownCard } from '@/components/SetterBreakdownCard';
 import { useTeammates } from '@/hooks/useTeammates';
-import type { Persona } from '@/pages/Personas';
+import { TEMPERATURE_CONFIG } from '@/lib/leadScoring';
+import { formatDistanceToNow } from 'date-fns';
 
 export default function Dashboard() {
   const { user, profile, activeRole } = useAuth();
@@ -43,7 +44,7 @@ export default function Dashboard() {
   const [dealLeadId, setDealLeadId] = useState('');
   const [dealAmount, setDealAmount] = useState('');
   const [createLeadOpen, setCreateLeadOpen] = useState(false);
-  const [outreachFilter, setOutreachFilter] = useState('all');
+  const [skippedLeadIds, setSkippedLeadIds] = useState<Set<string>>(new Set());
 
   const { data: leads = [] } = useQuery({
     queryKey: ['dashboard-leads', user?.id],
@@ -139,8 +140,7 @@ export default function Dashboard() {
   const CALL_PROPOSED_STATUSES = new Set(['appel_propose', 'rendez_vous_booke']);
   const RDV_BOOKED_STATUSES = new Set(['rendez_vous_booke']);
 
-  // Apply outreach filter to leads for all KPIs
-  const filteredLeads = outreachFilter === 'all' ? leads : leads.filter((l) => l.outreach_type === outreachFilter);
+  const filteredLeads = leads;
 
   const contactedCount = filteredLeads.filter((l) => inPeriod(l.conversation_started_at || l.created_at)).length;
   const respondedCount = filteredLeads.filter((l) => RESPONDED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
@@ -154,197 +154,118 @@ export default function Dashboard() {
   const totalRevenue = filteredDeals.filter((d: any) => d.status === 'won').reduce((s: number, d: any) => s + Number(d.amount), 0);
   const rdvLeads = filteredLeads.filter((l) => l.status === 'rendez_vous_booke' && !deals.find((d: any) => d.lead_id === l.id));
 
-  // Outreach comparison analytics (uses filteredLeads so it respects the active filter)
-  const outreachComparison = useMemo(() => {
-    const calcStats = (subset: Lead[]) => {
-      const contacted = subset.filter((l) => inPeriod(l.conversation_started_at || l.created_at)).length;
-      const responded = subset.filter((l) => RESPONDED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
-      const calls = subset.filter((l) => CALL_PROPOSED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
-      const rdv = subset.filter((l) => RDV_BOOKED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
-      return {
-        contacted,
-        responded,
-        calls,
-        rdv,
-        respRate: contacted > 0 ? Math.round((responded / contacted) * 100) : 0,
-        bookingRate: contacted > 0 ? Math.round((rdv / contacted) * 100) : 0,
-      };
-    };
-    // When a specific outreach filter is active, show only that type; otherwise show all types
-    if (outreachFilter !== 'all') {
-      return {
-        [outreachFilter]: calcStats(filteredLeads),
-      } as Record<string, ReturnType<typeof calcStats>>;
-    }
-    return {
-      message_texte: calcStats(filteredLeads.filter((l) => l.outreach_type === 'message_texte')),
-      video: calcStats(filteredLeads.filter((l) => l.outreach_type === 'video')),
-      vocal: calcStats(filteredLeads.filter((l) => l.outreach_type === 'vocal')),
-    } as Record<string, ReturnType<typeof calcStats>>;
-  }, [filteredLeads, dateRange, outreachFilter]);
-
-  const priorityActions = useMemo(() => getPriorityActions(filteredLeads), [filteredLeads]);
-  const userAlerts = useMemo(() => getUserAlerts(filteredLeads), [filteredLeads]);
-
-  const personaMap = useMemo(() => {
-    const map = new Map<string, typeof allPersonas[0]>();
-    allPersonas.forEach((p) => map.set(p.id, p));
-    return map;
-  }, [allPersonas]);
-
-  const personaStats = useMemo(() => {
-    const personaLeads = filteredLeads.filter((l) => (l as any).persona_id);
-    const grouped = new Map<string, Lead[]>();
-    for (const l of personaLeads) {
-      const pid = (l as any).persona_id;
-      if (!grouped.has(pid)) grouped.set(pid, []);
-      grouped.get(pid)!.push(l);
-    }
-    return Array.from(grouped.entries()).map(([pid, pLeads]) => {
-      const persona = personaMap.get(pid);
-      const name = persona?.name || 'Inconnu';
-      const contacted = pLeads.filter((l) => inPeriod(l.conversation_started_at || l.created_at)).length;
-      const responded = pLeads.filter((l) => RESPONDED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
-      const rdv = pLeads.filter((l) => RDV_BOOKED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
-      const respRate = contacted > 0 ? Math.round((responded / contacted) * 100) : 0;
-      return { pid, name, contacted, responded, rdv, respRate, sector: persona?.sector, target_type: persona?.target_type, company_size: persona?.company_size };
-    }).sort((a, b) => b.rdv - a.rdv || b.contacted - a.contacted);
-  }, [filteredLeads, personaMap, dateRange]);
-
-  // Stats by dimension
-  const dimensionStats = useMemo(() => {
-    const personaLeads = filteredLeads.filter((l) => (l as any).persona_id);
-    const bySector = new Map<string, { contacted: number; responded: number; rdv: number }>();
-    const byType = new Map<string, { contacted: number; responded: number; rdv: number }>();
-
-    for (const l of personaLeads) {
-      const persona = personaMap.get((l as any).persona_id);
-      if (!persona) continue;
-      const isInPeriod = inPeriod(l.conversation_started_at || l.created_at);
-      const hasResp = isInPeriod && RESPONDED_STATUSES.has(l.status);
-      const hasRdv = isInPeriod && RDV_BOOKED_STATUSES.has(l.status);
-
-      for (const [key, map] of [[persona.sector, bySector], [persona.target_type, byType]] as const) {
-        if (!key) continue;
-        const m = map as Map<string, { contacted: number; responded: number; rdv: number }>;
-        if (!m.has(key)) m.set(key, { contacted: 0, responded: 0, rdv: 0 });
-        const entry = m.get(key)!;
-        if (isInPeriod) entry.contacted++;
-        if (hasResp) entry.responded++;
-        if (hasRdv) entry.rdv++;
-      }
-    }
-
-    const toArray = (m: Map<string, { contacted: number; responded: number; rdv: number }>) =>
-      Array.from(m.entries()).map(([key, v]) => ({
-        key,
-        ...v,
-        respRate: v.contacted > 0 ? Math.round((v.responded / v.contacted) * 100) : 0,
-      })).sort((a, b) => b.rdv - a.rdv || b.contacted - a.contacted);
-
-    return { bySector: toArray(bySector), byType: toArray(byType) };
-  }, [filteredLeads, personaMap, dateRange]);
+  const weekLabel = useMemo(() => {
+    const now = new Date();
+    const start = startOfWeek(now, { weekStartsOn: 1 });
+    const end = endOfWeek(now, { weekStartsOn: 1 });
+    return `${format(start, 'd MMM', { locale: fr })} → ${format(end, 'd MMM', { locale: fr })}`;
+  }, []);
 
   if (activeRole === 'coach') return <Navigate to="/coach" replace />;
 
-  const alertRoute = (alert: UserAlert) => {
-    if (alert.key === 'overdue_followups') return '/follow-ups';
-    if (alert.key === 'low_conversations') return '/leads';
-    return '/leads';
-  };
+  const skipLead = (id: string) =>
+    setSkippedLeadIds((prev) => new Set([...prev, id]));
 
-  const primaryPersona = myPersonas.find((p) => p.is_primary);
+  const mainAction = priorityActions[0] ?? null;
+  const secondaryActions = priorityActions.slice(1, 3);
 
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 space-y-6" data-testid="page-dashboard">
+
         {/* Header */}
-        <div className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Bonjour, {profile?.full_name || 'Setter'} 👋
-              </h1>
-              <p className="text-muted-foreground">Votre journée en focus</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => setCreateLeadOpen(true)} size="sm" data-testid="dashboard-new-lead">
-                <Plus className="mr-1 h-4 w-4" /> Nouveau lead
-              </Button>
-              {primaryPersona && (
-                <Link to="/personas" className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 hover:bg-muted/50 transition-colors">
-                  <Target className="h-4 w-4 text-primary shrink-0" />
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Cible actuelle</p>
-                    <p className="text-sm font-medium text-foreground">{primaryPersona.name}</p>
-                  </div>
-                </Link>
-              )}
-            </div>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Bonjour, {profile?.full_name || 'Setter'} 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">Cette semaine • {weekLabel}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DateRangeFilter value={dateRange} onChange={setDateRange} />
-            <div className="flex gap-1">
-              {[
-                { value: 'all', label: 'Tous', icon: null },
-                { value: 'message_texte', label: 'Écrit', icon: <PenLine className="h-3 w-3" /> },
-                { value: 'video', label: 'Vidéo', icon: <Video className="h-3 w-3" /> },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setOutreachFilter(opt.value)}
-                  className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    outreachFilter === opt.value
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  {opt.icon}{opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Button onClick={() => setCreateLeadOpen(true)} size="sm" data-testid="dashboard-new-lead">
+            <Plus className="mr-1 h-4 w-4" /> Nouveau lead
+          </Button>
         </div>
 
-        {/* Bandeau Score / série */}
+        {/* ScoreCard */}
         <div className="relative">
           <Button variant="ghost" size="icon" className="absolute top-3 right-3 z-10 h-7 w-7" onClick={() => setScoreInfoOpen(true)}>
             <Info className="h-4 w-4 text-muted-foreground" />
           </Button>
-          <ScoreCard totalScore={gamification.totalScore} todayScore={gamification.todayScore} weekScore={gamification.weekScore} level={gamification.level} streak={gamification.streak} />
+          <ScoreCard
+            totalScore={gamification.totalScore}
+            todayScore={gamification.todayScore}
+            weekScore={gamification.weekScore}
+            level={gamification.level}
+            streak={gamification.streak}
+          />
         </div>
 
         {/* Ta prochaine action */}
-        {priorityActions.length > 0 && (() => {
-          const pa = priorityActions[0];
-          return (
-            <Card className={`border-l-4 ${PRIORITY_CONFIG[pa.level].className}`}>
-              <CardHeader className="pb-2">
+        {mainAction && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Ta prochaine action
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between gap-4">
+                {priorityActions.length > 1 && (
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    {priorityActions.length - 1} en attente
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Lead principal */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PRIORITY_CONFIG[pa.level].dotClassName}`} />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-sm text-foreground">
+                    {(mainAction.lead.first_name?.[0] ?? '?').toUpperCase()}
+                    {(mainAction.lead.last_name?.[0] ?? '').toUpperCase()}
+                  </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground">
-                      {pa.lead.first_name} {pa.lead.last_name}
-                      {pa.lead.company_name && <span className="ml-1.5 text-sm font-normal text-muted-foreground">— {pa.lead.company_name}</span>}
+                      {mainAction.lead.first_name} {mainAction.lead.last_name}
                     </p>
-                    <p className="text-sm text-muted-foreground truncate">{pa.reason}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {mainAction.reason}
+                      {(mainAction.lead as any).score != null && (
+                        <> • {TEMPERATURE_CONFIG[mainAction.lead.score >= 50 ? 'hot' : mainAction.lead.score >= 25 ? 'warm' : 'cold'].emoji} score {(mainAction.lead as any).score}</>
+                      )}
+                    </p>
                   </div>
                 </div>
-                <Link to="/leads" className="shrink-0">
-                  <Button size="sm">
-                    {pa.action}
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link to="/inbox">
+                    <Button size="sm">Ouvrir la conversation</Button>
+                  </Link>
+                  <Button size="sm" variant="outline" onClick={() => skipLead(mainAction.lead.id)}>
+                    Plus tard
                   </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          );
-        })()}
+                </div>
+              </div>
+
+              {/* Actions secondaires */}
+              {secondaryActions.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2 pt-2 border-t">
+                  {secondaryActions.map((pa, i) => (
+                    <div key={`${pa.lead.id}-${i}`} className="flex items-center gap-3 rounded-lg border p-3">
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${PRIORITY_CONFIG[pa.level].className}`}>
+                        {pa.level === 'high' ? 'Urgent' : 'Medium'}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {pa.lead.first_name} {pa.lead.last_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{pa.reason}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* KPIs */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
@@ -403,216 +324,11 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Alertes */}
-        {userAlerts.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                Alertes
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {userAlerts.map((alert) => (
-                <Link
-                  key={alert.key}
-                  to={alertRoute(alert)}
-                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${
-                    alert.severity === 'high' ? 'border-destructive/30 bg-destructive/5' :
-                    alert.severity === 'medium' ? 'border-amber-300/50 bg-amber-50/50' :
-                    'border-border'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
-                      alert.severity === 'high' ? 'bg-destructive' :
-                      alert.severity === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground'
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                      <p className="text-xs text-muted-foreground">{alert.description}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-primary font-medium shrink-0 ml-2">{alert.action} →</span>
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Today's Actions */}
-        <TodaysActionsCard />
-
         {/* Per-setter breakdown (team accounts only) */}
         {isTeam && (
           <SetterBreakdownCard leads={filteredLeads} teammates={teammates} inPeriod={inPeriod} />
         )}
 
-        {/* Actions prioritaires (suite) */}
-        {priorityActions.length > 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                Actions prioritaires
-                <Badge variant="secondary" className="text-xs ml-1">{priorityActions.length - 1}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {priorityActions.slice(1, 8).map((pa, i) => (
-                <Link
-                  key={`${pa.lead.id}-${i}`}
-                  to="/leads"
-                  className={`flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50 ${PRIORITY_CONFIG[pa.level].className}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${PRIORITY_CONFIG[pa.level].dotClassName}`} />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-foreground">{pa.lead.first_name} {pa.lead.last_name}</p>
-                        {pa.lead.company_name && <span className="text-xs text-muted-foreground">— {pa.lead.company_name}</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{pa.reason}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-medium text-primary">{pa.action}</span>
-                    <ArrowRight className="h-3 w-3 text-primary" />
-                  </div>
-                </Link>
-              ))}
-              {priorityActions.length > 9 && (
-                <Link to="/leads" className="block text-center text-sm text-primary hover:underline py-1">
-                  Voir les {priorityActions.length - 9} autres actions →
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Performance par format d'approche */}
-        {Object.values(outreachComparison).some((d) => d.contacted > 0) && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Video className="h-4 w-4 text-primary" />
-                Performance par format d'approche
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-3">
-                {([
-                  { key: 'message_texte', label: '✍️ Écrit' },
-                  { key: 'video', label: '🎥 Vidéo' },
-                  { key: 'vocal', label: '🎙️ Vocal' },
-                ] as const).filter(({ key }) => outreachComparison[key]?.contacted > 0).map(({ key, label }) => {
-                  const data = outreachComparison[key]!;
-                  return (
-                    <div key={key} className="rounded-lg border p-3 space-y-2">
-                      <p className="text-sm font-medium text-foreground">{label}</p>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-muted-foreground">Conversations</span><p className="font-medium text-foreground">{data.contacted}</p></div>
-                        <div><span className="text-muted-foreground">Réponses</span><p className="font-medium text-foreground">{data.responded}</p></div>
-                        <div><span className="text-muted-foreground">Appels</span><p className="font-medium text-foreground">{data.calls}</p></div>
-                        <div><span className="text-muted-foreground">RDV</span><p className="font-medium text-foreground">{data.rdv}</p></div>
-                      </div>
-                      <div className="flex gap-3 pt-1 border-t text-xs">
-                        <div>
-                          <span className="text-muted-foreground">Taux rép.</span>
-                          <p className="font-semibold text-foreground">{data.respRate}%</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Taux booking</span>
-                          <p className="font-semibold text-foreground">{data.bookingRate}%</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Performance par cible */}
-        {personaStats.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="h-4 w-4 text-primary" />
-                Performance par cible
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {personaStats.map((ps) => (
-                  <div key={ps.pid} className="flex items-center justify-between rounded-md border p-3">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline">{ps.name}</Badge>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {ps.sector && <span className="text-[10px]">{ps.sector}</span>}
-                        {ps.target_type && <span className="text-[10px]">· {ps.target_type}</span>}
-                      </div>
-                    </div>
-                    <div className="flex gap-4 text-xs text-muted-foreground shrink-0">
-                      <span>{ps.contacted} conv.</span>
-                      <span>{ps.respRate}% rép.</span>
-                      <span className="font-medium text-foreground">{ps.rdv} RDV</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Stats par secteur & type */}
-        {(dimensionStats.bySector.length > 0 || dimensionStats.byType.length > 0) && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {dimensionStats.bySector.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Performance par secteur</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {dimensionStats.bySector.map((s) => (
-                      <div key={s.key} className="flex items-center justify-between rounded-md border p-2.5">
-                        <span className="text-sm font-medium">{s.key}</span>
-                        <div className="flex gap-3 text-xs text-muted-foreground">
-                          <span>{s.contacted} conv.</span>
-                          <span>{s.respRate}% rép.</span>
-                          <span className="font-medium text-foreground">{s.rdv} RDV</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {dimensionStats.byType.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Performance par type de cible</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {dimensionStats.byType.map((t) => (
-                      <div key={t.key} className="flex items-center justify-between rounded-md border p-2.5">
-                        <span className="text-sm font-medium">{t.key}</span>
-                        <div className="flex gap-3 text-xs text-muted-foreground">
-                          <span>{t.contacted} conv.</span>
-                          <span>{t.respRate}% rép.</span>
-                          <span className="font-medium text-foreground">{t.rdv} RDV</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Score explanation modal */}

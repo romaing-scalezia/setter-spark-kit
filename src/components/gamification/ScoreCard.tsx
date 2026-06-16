@@ -1,6 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { TrendingUp, Star, Zap, Calendar } from 'lucide-react';
 
 interface ScoreCardProps {
   totalScore: number;
@@ -10,47 +8,32 @@ interface ScoreCardProps {
   streak: { current_streak: number; longest_streak: number };
 }
 
-export function ScoreCard({ totalScore, todayScore, weekScore, level, streak }: ScoreCardProps) {
+export function ScoreCard({ totalScore, level, streak }: ScoreCardProps) {
+  const ptsLeft = Math.max(0, level.nextThreshold - totalScore);
+
   return (
-    <Card className="border-0 bg-gradient-to-br from-primary/5 via-card to-primary/5">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">Setting Score</p>
-            <p className="text-3xl font-bold text-foreground">{totalScore}</p>
+    <div className="rounded-2xl border bg-gradient-to-br from-primary/5 via-card to-primary/5 p-5 space-y-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-primary/30 bg-background">
+            <span className="text-xl font-bold text-foreground">{totalScore}</span>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1">
-            <Star className="h-3.5 w-3.5 text-primary" />
-            <span className="text-sm font-semibold text-primary">Niv. {level.level} — {level.title}</span>
-          </div>
+          <p className="text-base font-semibold text-foreground">
+            {streak.current_streak > 0
+              ? `🔥 Série de ${streak.current_streak} jour${streak.current_streak > 1 ? 's' : ''} — continue !`
+              : 'Commence ta série aujourd\'hui !'}
+          </p>
         </div>
+        <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+          Niv. {level.level} — {level.title}
+        </span>
+      </div>
 
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Progression vers Niv. {level.level + 1}</span>
-            <span>{level.progress}%</span>
-          </div>
-          <Progress value={level.progress} className="h-2" />
-        </div>
+      <Progress value={level.progress} className="h-4 rounded-full" />
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg bg-background/80 p-3 text-center">
-            <Zap className="h-4 w-4 text-warning mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">{todayScore}</p>
-            <p className="text-xs text-muted-foreground">Aujourd'hui</p>
-          </div>
-          <div className="rounded-lg bg-background/80 p-3 text-center">
-            <TrendingUp className="h-4 w-4 text-primary mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">{weekScore}</p>
-            <p className="text-xs text-muted-foreground">Cette semaine</p>
-          </div>
-          <div className="rounded-lg bg-background/80 p-3 text-center">
-            <Calendar className="h-4 w-4 text-success mx-auto mb-1" />
-            <p className="text-lg font-bold text-foreground">{streak.current_streak}</p>
-            <p className="text-xs text-muted-foreground">Jours consécutifs</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <p className="text-xs text-muted-foreground">
+        Setting Score {totalScore} • Plus que <span className="font-semibold text-foreground">{ptsLeft} pts</span> pour le niveau {level.level + 1}
+      </p>
+    </div>
   );
 }
