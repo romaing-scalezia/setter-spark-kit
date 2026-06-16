@@ -161,6 +161,11 @@ export default function Dashboard() {
     return `${format(start, 'd MMM', { locale: fr })} → ${format(end, 'd MMM', { locale: fr })}`;
   }, []);
 
+  const priorityActions = useMemo(
+    () => getPriorityActions(filteredLeads).filter((pa) => !skippedLeadIds.has(pa.lead.id)),
+    [filteredLeads, skippedLeadIds],
+  );
+
   if (activeRole === 'coach') return <Navigate to="/coach" replace />;
 
   const skipLead = (id: string) =>
