@@ -10,16 +10,16 @@ import {
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-/* ─── Duotone icon paths (from SetterFlow Sidebar.html reference) ─── */
+/* ─── Duotone icon paths ─── */
 const DUO: Record<string, string> = {
-  dash: `<path class="fill" d="M4 4h6v6H4zM14 14h6v6h-6z"/><path class="ln" d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>`,
-  inbox: `<path class="fill" d="M3 13h5l2 3h4l2-3h5v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path class="ln" d="M3 13h5l2 3h4l2-3h5M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/>`,
-  leads: `<circle class="fill" cx="9" cy="8" r="3.4"/><path class="ln" d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle class="ln" cx="9" cy="8" r="3.4"/><path class="ln" d="M16 3.6a3.4 3.4 0 0 1 0 6.6M22 21v-2a4 4 0 0 0-3-3.85"/>`,
-  clock: `<circle class="fill" cx="12" cy="12.5" r="8"/><circle class="ln" cx="12" cy="12.5" r="8"/><path class="ln" d="M12 8v4.5l3 1.8"/>`,
-  res: `<path class="fill" d="m12 3 8 4.5-8 4.5-8-4.5z"/><path class="ln" d="m12 3 8 4.5-8 4.5-8-4.5z"/><path class="ln" d="m4 12 8 4.5 8-4.5"/>`,
-  trophy: `<path class="fill" d="M6 5h12v4a6 6 0 0 1-12 0z"/><path class="ln" d="M6 5h12v4a6 6 0 0 1-12 0zM6 5H4v2a3 3 0 0 0 2 2.85M18 5h2v2a3 3 0 0 1-2 2.85M9 20h6M12 15.5V20"/>`,
+  dash: `<rect class="fill" x="3.5" y="5" width="17" height="14" rx="3"/><rect class="ln" x="3.5" y="5" width="17" height="14" rx="3"/><path class="ln" d="M6.5 12.5h1.8l1.4-3.4 2.2 6.6 1.4-3.2H17.5"/>`,
+  inbox: `<path class="fill" d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15H9.5L5.5 18v-3A2.5 2.5 0 0 1 4 12.5Z"/><path class="ln" d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15H9.5L5.5 18v-3A2.5 2.5 0 0 1 4 12.5Z"/><circle fill="currentColor" cx="8.3" cy="9.3" r="1.05"/><circle fill="currentColor" cx="12" cy="9.3" r="1.05"/><circle fill="currentColor" cx="15.7" cy="9.3" r="1.05"/>`,
+  leads: `<circle class="fill" cx="9.2" cy="8" r="3.4"/><path class="fill" d="M3.6 19v-1.1A4.8 4.8 0 0 1 8.4 13.1h1.6A4.8 4.8 0 0 1 14.8 17.9V19Z"/><circle class="ln" cx="9.2" cy="8" r="3.4"/><path class="ln" d="M3.6 19v-1.1A4.8 4.8 0 0 1 8.4 13.1h1.6A4.8 4.8 0 0 1 14.8 17.9V19"/><circle class="ln" cx="16.8" cy="8.6" r="2.5"/><path class="ln" d="M15.3 13.2h1.3a4.3 4.3 0 0 1 4.3 4.3V19h-3"/>`,
+  clock: `<circle class="fill" cx="12" cy="12" r="2.7"/><path class="ln" d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path class="ln" d="M17.6 3.4v3.6h-3.6"/><circle class="ln" cx="12" cy="12" r="2.7"/>`,
+  res: `<path class="fill" d="M12 6.4C10 5 7 5 4.5 6.2v11.6C7 16.6 10 16.6 12 18Z"/><path class="ln" d="M12 6.4C10 5 7 5 4.5 6.2v11.6C7 16.6 10 16.6 12 18c2-1.4 5-1.4 7.5-.2V6.2C17 5 14 5 12 6.4Z"/><path class="ln" d="M12 6.4V18"/>`,
+  trophy: `<rect class="fill" x="3.5" y="13.5" width="5" height="6.5" rx="1.2"/><rect class="fill" x="9.5" y="9.5" width="5" height="10.5" rx="1.2"/><rect class="fill" x="15.5" y="15.5" width="5" height="4.5" rx="1.2"/><rect class="ln" x="3.5" y="13.5" width="5" height="6.5" rx="1.2"/><rect class="ln" x="9.5" y="9.5" width="5" height="10.5" rx="1.2"/><rect class="ln" x="15.5" y="15.5" width="5" height="4.5" rx="1.2"/><path fill="currentColor" d="M12 3l.85 1.75 1.9.27-1.38 1.32.33 1.9L12 7.6l-1.7.91.33-1.9L9.25 5.3l1.9-.55z"/>`,
   settings: `<circle class="fill" cx="12" cy="12" r="3.2"/><circle class="ln" cx="12" cy="12" r="3.2"/><path class="ln" d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>`,
-  megaphone: `<path class="fill" d="M11 5 6 9H2v6h4l5 4z"/><path class="ln" d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/>`,
+  megaphone: `<circle class="fill" cx="18" cy="12" r="2.6"/><circle class="ln" cx="5.5" cy="6.5" r="2.2"/><circle class="ln" cx="5.5" cy="17.5" r="2.2"/><circle class="ln" cx="18" cy="12" r="2.6"/><path class="ln" d="M7.6 7.2 15.4 11M7.6 16.8 15.4 13"/>`,
 };
 
 function DuoIcon({ name, className = '' }: { name: string; className?: string }) {
