@@ -78,9 +78,21 @@ export function useCampaigns() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns', user?.id] }),
   });
 
+  const deleteCampaign = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from('campaigns')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns', user?.id] }),
+  });
+
   return {
     campaigns: query.data ?? [],
     isLoading: query.isLoading,
     toggleStatus,
+    deleteCampaign,
   };
 }

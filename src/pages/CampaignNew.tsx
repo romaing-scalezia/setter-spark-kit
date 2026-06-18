@@ -102,11 +102,12 @@ const SCENARIOS: Array<{
 ];
 
 /* ─── Step indicator ─── */
-function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
+function StepIndicator({ current }: { current: 1 | 2 | 3 | 4 }) {
   const steps = [
     { n: 1, label: 'Infos & scénario' },
     { n: 2, label: 'Messages & délais' },
     { n: 3, label: 'Import leads' },
+    { n: 4, label: 'Confirmation' },
   ];
   return (
     <div className="flex items-center gap-0">
@@ -130,7 +131,7 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
             </span>
           </div>
           {i < steps.length - 1 && (
-            <div className={`mx-3 mb-4 h-px w-16 transition-colors ${current > s.n + 0 ? 'bg-primary/30' : 'bg-border'}`} />
+            <div className={`mx-3 mb-4 h-px w-12 transition-colors ${current > s.n ? 'bg-primary/30' : 'bg-border'}`} />
           )}
         </div>
       ))}
@@ -145,7 +146,7 @@ export default function CampaignNew() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [step, setStep]                 = useState<1 | 2 | 3>(1);
+  const [step, setStep]                 = useState<1 | 2 | 3 | 4>(1);
   const [name, setName]                 = useState('');
   const [scenarioType, setScenarioType] = useState<ScenarioType>('A');
   const [personaId, setPersonaId]       = useState<string>('');
@@ -207,42 +208,39 @@ export default function CampaignNew() {
     reader.readAsText(file);
   }
 
-  /* ─── Launch mutation ─── */
-  const launch = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error('Non authentifié');
+  /* ─── Shared campaign insert helper ─── */
+  async function insertCampaign(status: 'active' | 'draft') {
+    if (!user) throw new Error('Non authentifié');
 
-      // 1. Create campaign
-      const { data: campaign, error: cErr } = await (supabase as any)
-        .from('campaigns')
-        .insert({
-          user_id:       user.id,
-          name:          name.trim(),
-          scenario_type: scenarioType,
-          persona_id:    personaId || null,
-          status:        'active',
-        })
-        .select('id')
-        .single();
-      if (cErr) throw cErr;
+    const { data: campaign, error: cErr } = await (supabase as any)
+      .from('campaigns')
+      .insert({
+        user_id:       user.id,
+        name:          name.trim(),
+        scenario_type: scenarioType,
+        persona_id:    personaId || null,
+        status,
+      })
+      .select('id')
+      .single();
+    if (cErr) throw cErr;
 
-      const campaignId: string = campaign.id;
+    const campaignId: string = campaign.id;
 
-      // 2. Create steps
-      const { error: sErr } = await (supabase as any)
-        .from('campaign_steps')
-        .insert(
-          stepsConfig.map((s) => ({
-            campaign_id:     campaignId,
-            step_order:      s.step_order,
-            action_type:     s.action_type,
-            message_content: s.message_content || null,
-            delay_days:      s.delay_days,
-          }))
-        );
-      if (sErr) throw sErr;
+    const { error: sErr } = await (supabase as any)
+      .from('campaign_steps')
+      .insert(
+        stepsConfig.map((s) => ({
+          campaign_id:     campaignId,
+          step_order:      s.step_order,
+          action_type:     s.action_type,
+          message_content: s.message_content || null,
+          delay_days:      s.delay_days,
+        }))
+      );
+    if (sErr) throw sErr;
 
-      // 3. Create leads
+    if (csvLeads.length > 0) {
       const { data: insertedLeads, error: lErr } = await (supabase as any)
         .from('campaign_leads')
         .insert(
@@ -250,34 +248,53 @@ export default function CampaignNew() {
             campaign_id:  campaignId,
             user_id:      user.id,
             linkedin_url: l.linkedin_url,
-            first_name:   l.first_name  || null,
-            last_name:    l.last_name   || null,
+            first_name:   l.first_name   || null,
+            last_name:    l.last_name    || null,
             company_name: l.company_name || null,
           }))
         )
         .select('id');
       if (lErr) throw lErr;
 
-      // 4. Create initial visit jobs (one per lead, execute now)
-      const now = new Date().toISOString();
-      const { error: jErr } = await (supabase as any)
-        .from('campaign_jobs')
-        .insert(
-          (insertedLeads ?? []).map((lead: { id: string }) => ({
-            campaign_id:      campaignId,
-            campaign_lead_id: lead.id,
-            user_id:          user.id,
-            action_type:      'visit',
-            status:           'pending',
-            execute_at:       now,
-          }))
-        );
-      if (jErr) throw jErr;
+      if (status === 'active') {
+        const now = new Date().toISOString();
+        const { error: jErr } = await (supabase as any)
+          .from('campaign_jobs')
+          .insert(
+            (insertedLeads ?? []).map((lead: { id: string }) => ({
+              campaign_id:      campaignId,
+              campaign_lead_id: lead.id,
+              user_id:          user.id,
+              action_type:      'visit',
+              status:           'pending',
+              execute_at:       now,
+            }))
+          );
+        if (jErr) throw jErr;
+      }
+    }
 
-      return campaignId;
-    },
+    return campaignId;
+  }
+
+  /* ─── Launch mutation ─── */
+  const launch = useMutation({
+    mutationFn: () => insertCampaign('active'),
     onSuccess: (campaignId) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
+      navigate(`/campaigns/${campaignId}`);
+    },
+    onError: (e: any) => {
+      toast({ variant: 'destructive', title: 'Erreur', description: e.message });
+    },
+  });
+
+  /* ─── Save draft mutation ─── */
+  const saveDraft = useMutation({
+    mutationFn: () => insertCampaign('draft'),
+    onSuccess: (campaignId) => {
+      qc.invalidateQueries({ queryKey: ['campaigns'] });
+      toast({ title: 'Brouillon enregistré' });
       navigate(`/campaigns/${campaignId}`);
     },
     onError: (e: any) => {
@@ -382,7 +399,17 @@ export default function CampaignNew() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                disabled={!step1Valid || saveDraft.isPending}
+                onClick={() => saveDraft.mutate()}
+              >
+                {saveDraft.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                Enregistrer en brouillon
+              </Button>
               <Button disabled={!step1Valid} onClick={() => setStep(2)}>
                 Suivant
                 <ArrowRight className="h-4 w-4 ml-1.5" />
@@ -475,15 +502,27 @@ export default function CampaignNew() {
               </div>
             ))}
 
-            <div className="flex justify-between">
+            <div className="flex items-center justify-between">
               <Button variant="outline" onClick={() => setStep(1)}>
                 <ArrowLeft className="h-4 w-4 mr-1.5" />
                 Retour
               </Button>
-              <Button onClick={() => setStep(3)}>
-                Suivant
-                <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  disabled={saveDraft.isPending}
+                  onClick={() => saveDraft.mutate()}
+                >
+                  {saveDraft.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Enregistrer en brouillon
+                </Button>
+                <Button onClick={() => setStep(3)}>
+                  Suivant
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -560,22 +599,111 @@ export default function CampaignNew() {
               </div>
             )}
 
-            <div className="flex justify-between">
+            <div className="flex items-center justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>
                 <ArrowLeft className="h-4 w-4 mr-1.5" />
                 Retour
               </Button>
-              <Button
-                disabled={!step3Valid || launch.isPending}
-                onClick={() => launch.mutate()}
-              >
-                {launch.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                ) : (
-                  <Check className="h-4 w-4 mr-1.5" />
-                )}
-                Lancer la campagne
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  disabled={saveDraft.isPending}
+                  onClick={() => saveDraft.mutate()}
+                >
+                  {saveDraft.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Enregistrer en brouillon
+                </Button>
+                <Button disabled={!step3Valid} onClick={() => setStep(4)}>
+                  Suivant
+                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 4 : Confirmation ─── */}
+        {step === 4 && (
+          <div className="space-y-5">
+            {/* Résumé général */}
+            <div className="rounded-xl border border-border bg-muted/20 divide-y divide-border">
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Campagne</span>
+                <span className="text-sm font-semibold text-foreground">{name}</span>
+              </div>
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scénario</span>
+                <span className="text-sm font-mono font-medium text-foreground">
+                  Scénario {scenarioType} — {stepsConfig.length} étape{stepsConfig.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              {personaId && personas.find((p) => p.id === personaId) && (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Persona</span>
+                  <span className="text-sm text-foreground">{personas.find((p) => p.id === personaId)!.name}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Prospects</span>
+                <span className="text-sm font-bold text-primary">
+                  {csvLeads.length} prospect{csvLeads.length > 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+
+            {/* Détail des étapes */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Séquence</p>
+              <div className="space-y-2">
+                {stepsConfig.map((s, i) => (
+                  <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white mt-0.5">
+                      {s.step_order}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-foreground">{s.label}</p>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {s.delay_days === 0 ? 'Immédiatement' : `J+${s.delay_days}`}
+                        </span>
+                      </div>
+                      {s.message_content && (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{s.message_content}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Button variant="outline" onClick={() => setStep(3)}>
+                <ArrowLeft className="h-4 w-4 mr-1.5" />
+                Retour
               </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  disabled={saveDraft.isPending || launch.isPending}
+                  onClick={() => saveDraft.mutate()}
+                >
+                  {saveDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                  Enregistrer en brouillon
+                </Button>
+                <Button
+                  disabled={launch.isPending || saveDraft.isPending}
+                  onClick={() => launch.mutate()}
+                >
+                  {launch.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-1.5" />
+                  )}
+                  Lancer la campagne
+                </Button>
+              </div>
             </div>
           </div>
         )}
