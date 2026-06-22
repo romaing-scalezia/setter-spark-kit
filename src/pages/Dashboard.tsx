@@ -207,7 +207,7 @@ export default function Dashboard() {
 
         {/* Ta prochaine action */}
         {mainAction && (
-          <Card>
+          <Card className="border-primary/30">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
@@ -254,7 +254,7 @@ export default function Dashboard() {
               {secondaryActions.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2 pt-2 border-t">
                   {secondaryActions.map((pa, i) => (
-                    <div key={`${pa.lead.id}-${i}`} className="flex items-center gap-3 rounded-lg border p-3">
+                    <div key={`${pa.lead.id}-${i}`} className="flex items-center gap-3 rounded-lg border border-primary/30 p-3">
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${PRIORITY_CONFIG[pa.level].className}`}>
                         {pa.level === 'high' ? 'Urgent' : 'Medium'}
                       </span>
@@ -274,15 +274,15 @@ export default function Dashboard() {
 
         {/* KPIs */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
-          <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} />
-          <KpiCard title="Réponses" value={respondedCount} icon={<PhoneCall className="h-4 w-4" />} />
-          <KpiCard title="Appels proposés" value={callProposedCount} icon={<PhoneCall className="h-4 w-4" />} />
-          <KpiCard title="RDV bookés" value={rdvBookedCount} icon={<CalendarCheck className="h-4 w-4" />} />
+          <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} className="border-primary/30" />
+          <KpiCard title="Réponses" value={respondedCount} icon={<PhoneCall className="h-4 w-4" />} className="border-primary/30" />
+          <KpiCard title="Appels proposés" value={callProposedCount} icon={<PhoneCall className="h-4 w-4" />} className="border-primary/30" />
+          <KpiCard title="RDV bookés" value={rdvBookedCount} icon={<CalendarCheck className="h-4 w-4" />} className="border-primary/30" />
         </div>
 
         {/* Conversion + CA */}
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+          <Card className="border-primary/30">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Taux de conversion</CardTitle>
             </CardHeader>
@@ -302,7 +302,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-primary/30">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-primary" />
@@ -346,7 +346,7 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground">Chaque action métier vous rapporte des points :</p>
             <div className="space-y-2">
               {SCORE_WEIGHTS_LABELS.map(({ label, points }) => (
-                <div key={label} className="flex items-center justify-between rounded-md border p-2.5">
+                <div key={label} className="flex items-center justify-between rounded-md border border-primary/30 p-2.5">
                   <span className="text-sm">{label}</span>
                   <Badge variant="secondary" className="text-xs font-semibold">+{points} pts</Badge>
                 </div>

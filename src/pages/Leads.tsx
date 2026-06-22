@@ -479,17 +479,17 @@ export default function Leads() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-foreground">Leads</h1>
-            <div className="flex rounded-md border p-0.5 gap-0.5">
+            <div className="flex rounded-md border border-primary/30 bg-primary/5 p-0.5 gap-0.5">
               <button
                 onClick={() => setViewMode('table')}
-                className={`rounded p-1.5 transition-colors ${viewMode === 'table' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded p-1.5 transition-colors ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 title="Vue table"
               >
                 <List className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setViewMode('kanban')}
-                className={`rounded p-1.5 transition-colors ${viewMode === 'kanban' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}
+                className={`rounded p-1.5 transition-colors ${viewMode === 'kanban' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 title="Vue kanban"
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -627,7 +627,7 @@ export default function Leads() {
         </div>
 
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-          <TabsList className="flex-wrap h-auto gap-1">
+          <TabsList className="flex-wrap h-auto gap-1 bg-primary/5 border border-primary/30">
             {STATUS_TABS.map((tab) => (
               <TabsTrigger key={tab.value} value={tab.value} className="text-xs">
                 {tab.label}
@@ -642,7 +642,7 @@ export default function Leads() {
         </Tabs>
 
         {viewMode === 'table' ? (
-          <div className="rounded-lg border bg-card" data-testid="leads-table">
+          <div className="rounded-lg border border-primary/30 bg-card" data-testid="leads-table">
             <Table>
               <TableHeader>
                 <TableRow>

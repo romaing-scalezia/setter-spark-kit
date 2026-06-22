@@ -8,11 +8,12 @@ interface KpiCardProps {
   subtitle?: string;
   trend?: number;
   icon?: React.ReactNode;
+  className?: string;
 }
 
-export function KpiCard({ title, value, subtitle, trend, icon }: KpiCardProps) {
+export function KpiCard({ title, value, subtitle, trend, icon, className }: KpiCardProps) {
   return (
-    <Card>
+    <Card className={className}>
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div className="space-y-1">

@@ -65,6 +65,7 @@ export default function CampaignDetail() {
   const invitedCount  = leads.filter((l) => l.invited_at).length;
   const acceptedCount = leads.filter((l) => l.accepted_at).length;
   const messaged1     = leads.filter((l) => l.messaged_1_at).length;
+  const repliedCount  = leads.filter((l) => l.replied_at).length;
   const acceptRate    = invitedCount > 0
     ? Math.round((acceptedCount / invitedCount) * 100)
     : 0;
@@ -127,7 +128,7 @@ export default function CampaignDetail() {
             sub={`${acceptedCount} / ${invitedCount}`}
           />
           <StatCard label="Messages envoyés"      value={messaged1} />
-          <StatCard label="Réponses reçues"       value="—" sub="Bientôt disponible" />
+          <StatCard label="Réponses reçues"       value={repliedCount} />
         </div>
 
         {/* Leads table */}

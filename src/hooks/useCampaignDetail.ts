@@ -24,6 +24,7 @@ export interface CampaignLead {
   messaged_1_at: string | null;
   messaged_2_at: string | null;
   messaged_3_at: string | null;
+  replied_at: string | null;
   error_message: string | null;
 }
 
@@ -61,7 +62,7 @@ export function useCampaignDetail(id: string | undefined) {
           .order('step_order', { ascending: true }),
         (supabase as any)
           .from('campaign_leads')
-          .select('id, linkedin_url, first_name, last_name, company_name, status, invited_at, accepted_at, messaged_1_at, messaged_2_at, messaged_3_at, error_message')
+          .select('id, linkedin_url, first_name, last_name, company_name, status, invited_at, accepted_at, messaged_1_at, messaged_2_at, messaged_3_at, replied_at, error_message')
           .eq('campaign_id', id),
         (supabase as any)
           .from('campaign_jobs')

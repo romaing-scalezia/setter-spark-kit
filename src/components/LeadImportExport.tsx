@@ -184,11 +184,11 @@ export function LeadImportExport({ leads, personaMap }: LeadImportExportProps) {
   return (
     <>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={handleExport}>
-          <Download className="mr-1.5 h-4 w-4" />Exporter CSV
-        </Button>
         <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-          <Upload className="mr-1.5 h-4 w-4" />Importer CSV
+          <Download className="mr-1.5 h-4 w-4" />Importer CSV
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleExport}>
+          <Upload className="mr-1.5 h-4 w-4" />Exporter CSV
         </Button>
         <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileSelect} />
       </div>

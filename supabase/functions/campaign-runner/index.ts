@@ -2,8 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const UNIPILE_BASE_URL = "https://api15.unipile.com:14546";
-const MAX_VISITS_PER_DAY  = 80;
-const MAX_INVITES_PER_DAY = 20;
+const MAX_VISITS_PER_DAY   = 80;
+const MAX_INVITES_PER_DAY  = 20;
 const MAX_MESSAGES_PER_DAY = 50;
 
 const corsHeaders = {
@@ -33,7 +33,6 @@ async function unipileRequest(path: string, method: string, apiKey: string, body
   catch { return { ok: res.ok, status: res.status, data: text }; }
 }
 
-// Map job action_type → campaign_steps step_order
 function actionTypeToStepOrder(actionType: string): number {
   if (actionType === "visit")     return 1;
   if (actionType === "invite")    return 2;
@@ -43,11 +42,10 @@ function actionTypeToStepOrder(actionType: string): number {
   return 0;
 }
 
-// Map campaign_steps action_type + step_order → job action_type
 function stepToJobActionType(actionType: string, stepOrder: number): string {
-  if (actionType === "visit")    return "visit";
-  if (actionType === "invite")   return "invite";
-  if (actionType === "message")  return `message_${stepOrder - 2}`;
+  if (actionType === "visit")   return "visit";
+  if (actionType === "invite")  return "invite";
+  if (actionType === "message") return `message_${stepOrder - 2}`;
   return actionType;
 }
 
@@ -95,18 +93,16 @@ serve(async (req) => {
       .gte("executed_at", todayStart.toISOString());
     const counts = { visits: 0, invites: 0, messages: 0 };
     for (const j of data ?? []) {
-      if (j.action_type === "visit")              counts.visits++;
-      else if (j.action_type === "invite")        counts.invites++;
+      if (j.action_type === "visit")                counts.visits++;
+      else if (j.action_type === "invite")          counts.invites++;
       else if (j.action_type.startsWith("message")) counts.messages++;
     }
     dailyCounts[userId] = counts;
     return counts;
   }
 
-  // Schedule the next step for a lead after a successful job
   async function scheduleNextStep(job: any, lead: any) {
     const currentStepOrder = actionTypeToStepOrder(job.action_type);
-
     const { data: nextStep } = await admin
       .from("campaign_steps")
       .select("step_order, action_type, delay_days")
@@ -114,19 +110,17 @@ serve(async (req) => {
       .eq("step_order", currentStepOrder + 1)
       .maybeSingle();
 
-    if (!nextStep) return; // no more steps → sequence complete
+    if (!nextStep) return;
 
     const executeAt = new Date(
       Date.now() + nextStep.delay_days * 24 * 60 * 60 * 1000
     ).toISOString();
 
-    const nextActionType = stepToJobActionType(nextStep.action_type, nextStep.step_order);
-
     await admin.from("campaign_jobs").insert({
       campaign_id:      job.campaign_id,
       campaign_lead_id: lead.id,
       user_id:          job.user_id,
-      action_type:      nextActionType,
+      action_type:      stepToJobActionType(nextStep.action_type, nextStep.step_order),
       status:           "pending",
       execute_at:       executeAt,
     });
@@ -139,7 +133,6 @@ serve(async (req) => {
     const userId = job.user_id;
     const counts = await getDailyCount(userId);
 
-    // Daily limits
     if (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   continue;
     if (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  continue;
     if (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY) continue;
@@ -166,10 +159,11 @@ serve(async (req) => {
     let errorMsg = "";
 
     try {
+
       /* ── VISIT ── */
       if (job.action_type === "visit") {
         const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "") ?? lead.provider_id;
-        const res  = await unipileRequest(
+        const res = await unipileRequest(
           `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}&notify=true`,
           "GET", apiKey
         );
@@ -187,7 +181,22 @@ serve(async (req) => {
 
       /* ── INVITE ── */
       } else if (job.action_type === "invite") {
-        if (!lead.provider_id) {
+        let providerId = lead.provider_id;
+
+        // Récupère le provider_id si manquant
+        if (!providerId) {
+          const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "");
+          const lookupRes = await unipileRequest(
+            `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}`,
+            "GET", apiKey
+          );
+          if (lookupRes.ok && lookupRes.data?.provider_id) {
+            providerId = lookupRes.data.provider_id;
+            await admin.from("campaign_leads").update({ provider_id: providerId }).eq("id", lead.id);
+          }
+        }
+
+        if (!providerId) {
           errorMsg = "Missing provider_id for invite";
         } else {
           const { data: step } = await admin
@@ -205,7 +214,7 @@ serve(async (req) => {
             : undefined;
 
           const res = await unipileRequest("/api/v1/users/invite", "POST", apiKey, {
-            provider_id: lead.provider_id,
+            provider_id: providerId,
             account_id:  accountId,
             ...(message ? { message } : {}),
           });
@@ -223,17 +232,36 @@ serve(async (req) => {
 
       /* ── MESSAGE ── */
       } else if (job.action_type.startsWith("message")) {
-        // message_1 requires acceptance
+
+        // message_1 : vérifie que la connexion est acceptée
         if (job.action_type === "message_1" && !lead.accepted_at) {
-          const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-          await admin.from("campaign_jobs")
-            .update({ status: "pending", execute_at: tomorrow })
-            .eq("id", job.id);
-          continue;
+          let isConnected = false;
+          if (lead.provider_id) {
+            const checkRes = await unipileRequest(
+              `/api/v1/users/${encodeURIComponent(lead.provider_id)}?account_id=${accountId}`,
+              "GET", apiKey
+            );
+            if (checkRes.ok) {
+              console.log("[check-connection]", JSON.stringify(checkRes.data));
+              isConnected = checkRes.data?.network_distance === "FIRST_DEGREE";
+            }
+          }
+          if (isConnected) {
+            await admin.from("campaign_leads")
+              .update({ accepted_at: now })
+              .eq("id", lead.id);
+            lead.accepted_at = now;
+          } else {
+            const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+            await admin.from("campaign_jobs")
+              .update({ status: "pending", execute_at: tomorrow })
+              .eq("id", job.id);
+            continue;
+          }
         }
 
-        const msgNum   = parseInt(job.action_type.replace("message_", ""), 10);
-        const stepOrder = msgNum + 2; // message_1 → step_order 3, message_2 → 4, etc.
+        const msgNum    = parseInt(job.action_type.replace("message_", ""), 10);
+        const stepOrder = msgNum + 2;
 
         const { data: step } = await admin
           .from("campaign_steps")
@@ -253,10 +281,14 @@ serve(async (req) => {
         if (!text) {
           errorMsg = `Missing message content for step ${stepOrder}`;
         } else {
+          // Envoie le message via POST /chats (crée ou retrouve le chat + envoie en une requête)
           const fd = new FormData();
+          fd.append("account_id", accountId);
+          fd.append("attendees_ids", lead.provider_id);
           fd.append("text", text);
+
           const res = await fetch(
-            `${UNIPILE_BASE_URL}/api/v1/chats/${encodeURIComponent(lead.unipile_chat_id ?? "")}/messages`,
+            `${UNIPILE_BASE_URL}/api/v1/chats`,
             {
               method: "POST",
               headers: { "X-API-KEY": apiKey, "accept": "application/json" },
@@ -264,6 +296,7 @@ serve(async (req) => {
             }
           );
           const resData = await res.json().catch(() => ({}));
+          console.log("[send-message]", JSON.stringify(resData));
 
           if (res.ok) {
             const updateData: Record<string, string> = {
@@ -272,7 +305,7 @@ serve(async (req) => {
             };
             await admin.from("campaign_leads").update(updateData).eq("id", lead.id);
 
-            // Créer / lier le lead dans la table leads au premier message
+            // Crée / lie le lead dans la table leads au premier message
             if (job.action_type === "message_1") {
               const { data: existingLead } = await admin
                 .from("leads")
@@ -284,13 +317,13 @@ serve(async (req) => {
               let leadId = existingLead?.id;
               if (!leadId) {
                 const { data: newLead } = await admin.from("leads").insert({
-                  owner_id:                 userId,
-                  first_name:               lead.first_name,
-                  last_name:                lead.last_name,
-                  company_name:             lead.company_name,
-                  linkedin_url:             lead.linkedin_url,
-                  status:                   "conversation_engagee",
-                  conversation_started_at:  now,
+                  owner_id:                userId,
+                  first_name:              lead.first_name,
+                  last_name:               lead.last_name,
+                  company_name:            lead.company_name,
+                  linkedin_url:            lead.linkedin_url,
+                  status:                  "conversation_engagee",
+                  conversation_started_at: now,
                 }).select("id").single();
                 leadId = newLead?.id;
               }
@@ -312,11 +345,11 @@ serve(async (req) => {
           }
         }
       }
+
     } catch (err) {
       errorMsg = String(err);
     }
 
-    // Marquer le job comme done ou failed
     await admin.from("campaign_jobs").update({
       status:        success ? "done" : "failed",
       executed_at:   now,
@@ -324,7 +357,6 @@ serve(async (req) => {
     }).eq("id", job.id);
 
     if (success) {
-      // ← LA CORRECTION : planifier l'étape suivante
       await scheduleNextStep(job, lead);
     } else {
       await admin.from("campaign_leads")

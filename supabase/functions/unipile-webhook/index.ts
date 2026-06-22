@@ -25,13 +25,14 @@ serve(async (req) => {
       return jsonResponse({ received: true, ignored: "non-POST" }, 200);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-  ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
-if (!supabaseUrl || !serviceRoleKey) {
-  console.error("[unipile-webhook] Missing env vars");
-  return jsonResponse({ received: true, error: "config" }, 200);
-}
+    const supabaseUrl    = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+      ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("[unipile-webhook] Missing env vars");
+      return jsonResponse({ received: true, error: "config" }, 200);
+    }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -54,43 +55,64 @@ if (!supabaseUrl || !serviceRoleKey) {
       return jsonResponse({ received: true, error: "missing fields" }, 200);
     }
 
+    // ── Connexion compte ──
     if (status === "CREATION_SUCCESS" || status === "RECONNECTED") {
       if (!name) {
         return jsonResponse({ received: true, error: "missing name (user_id)" }, 200);
       }
-
       const { error } = await admin
         .from("unipile_accounts")
         .upsert(
-          {
-            user_id: name,
-            account_id,
-            status: "connected",
-            updated_at: new Date().toISOString(),
-          },
+          { user_id: name, account_id, status: "connected", updated_at: new Date().toISOString() },
           { onConflict: "user_id" },
         );
-
-      if (error) {
-        console.error("[unipile-webhook] upsert error:", error);
-        return jsonResponse({ received: true, error: error.message }, 200);
-      }
-
+      if (error) console.error("[unipile-webhook] upsert error:", error);
       return jsonResponse({ received: true, action: "connected" }, 200);
     }
 
-    // Any other status (e.g. "CREDENTIALS") -> mark disconnected
+    // ── Acceptation d'invitation LinkedIn ──
+    if (status === "INVITATION_ACCEPTED" || status === "CONNECTION_ACCEPTED") {
+      const attendeeProviderId = (payload as any)?.provider_id
+        ?? (payload as any)?.attendee?.provider_id;
+      if (attendeeProviderId) {
+        const now = new Date().toISOString();
+        await admin
+          .from("campaign_leads")
+          .update({ accepted_at: now, status: "accepted" })
+          .eq("provider_id", attendeeProviderId)
+          .is("accepted_at", null);
+      }
+      return jsonResponse({ received: true, action: "accepted" }, 200);
+    }
+
+    // ── Message entrant → réponse reçue ──
+    if (status === "NEW_MESSAGE" || status === "INCOMING_MESSAGE" || status === "MESSAGE_RECEIVED") {
+      const senderProviderId = (payload as any)?.sender?.provider_id
+        ?? (payload as any)?.provider_id
+        ?? (payload as any)?.from?.provider_id;
+
+      if (senderProviderId) {
+        const now = new Date().toISOString();
+        // Met à jour replied_at uniquement si pas déjà rempli et que le lead a bien reçu un message
+        await admin
+          .from("campaign_leads")
+          .update({ replied_at: now })
+          .eq("provider_id", senderProviderId)
+          .not("messaged_1_at", "is", null)
+          .is("replied_at", null);
+      }
+      return jsonResponse({ received: true, action: "replied" }, 200);
+    }
+
+    // ── Déconnexion compte ──
     const { error } = await admin
       .from("unipile_accounts")
       .update({ status: "disconnected", updated_at: new Date().toISOString() })
       .eq("account_id", account_id);
 
-    if (error) {
-      console.error("[unipile-webhook] update error:", error);
-      return jsonResponse({ received: true, error: error.message }, 200);
-    }
-
+    if (error) console.error("[unipile-webhook] update error:", error);
     return jsonResponse({ received: true, action: "disconnected" }, 200);
+
   } catch (err) {
     console.error("[unipile-webhook] unexpected error:", err);
     return jsonResponse({ received: true, error: String(err) }, 200);

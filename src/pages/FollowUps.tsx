@@ -223,7 +223,7 @@ export default function FollowUps() {
           </Select>
         </div>
 
-        <Card>
+        <Card className="border-primary/30">
           <CardHeader>
             <CardTitle className="text-base">
               {sorted.length} tâche{sorted.length !== 1 ? 's' : ''}

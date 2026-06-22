@@ -110,7 +110,7 @@ export default function Campaigns() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/30 flex flex-col items-center justify-center py-16 gap-3">
+          <div className="rounded-xl border border-dashed border-primary/30 bg-muted/30 flex flex-col items-center justify-center py-16 gap-3">
             <p className="text-sm text-muted-foreground">Aucune campagne trouvée</p>
             <Button size="sm" variant="outline" onClick={() => navigate('/campaigns/new')}>
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -118,7 +118,7 @@ export default function Campaigns() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-xl border border-border overflow-hidden">
+          <div className="rounded-xl border border-primary/30 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
