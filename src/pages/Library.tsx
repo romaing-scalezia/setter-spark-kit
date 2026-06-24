@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, BookOpen, Search, Copy, Check, Pencil, Trash2, FolderOpen, Target, Settings2 } from 'lucide-react';
 import { CONTENT_TYPE_LABELS, type ContentType, type CoachingContent, type Profile } from '@/lib/constants';
+import { usePlan } from '@/hooks/usePlan';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import type { Persona } from '@/pages/Personas';
@@ -28,6 +29,7 @@ type ScriptCategory = {
 
 export function LibraryContent() {
   const { user, activeRole } = useAuth();
+  const { hasStarterAccess } = usePlan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const isCoachOrAdmin = activeRole === 'coach' || activeRole === 'admin';
@@ -294,9 +296,11 @@ export function LibraryContent() {
               <Select value={formType} onValueChange={(v) => setFormType(v as ContentType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(CONTENT_TYPE_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
-                  ))}
+                  {Object.entries(CONTENT_TYPE_LABELS)
+                    .filter(([key]) => key !== 'coach_note' || hasStarterAccess)
+                    .map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -429,7 +433,7 @@ export function LibraryContent() {
             <TabsTrigger value="script">Scripts</TabsTrigger>
             <TabsTrigger value="objection">Objections</TabsTrigger>
             <TabsTrigger value="recommendation">Recommandations</TabsTrigger>
-            <TabsTrigger value="coach_note">Notes coach</TabsTrigger>
+            {hasStarterAccess && <TabsTrigger value="coach_note">Notes coach</TabsTrigger>}
           </TabsList>
 
           {(['script', 'objection', 'recommendation', 'coach_note'] as ContentType[]).map((type) => (

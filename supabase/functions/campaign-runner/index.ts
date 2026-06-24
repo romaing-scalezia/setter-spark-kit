@@ -110,7 +110,13 @@ serve(async (req) => {
       .eq("step_order", currentStepOrder + 1)
       .maybeSingle();
 
-    if (!nextStep) return;
+    if (!nextStep) {
+      // Séquence terminée → marque le lead comme done
+      await admin.from("campaign_leads")
+        .update({ status: "done" })
+        .eq("id", lead.id);
+      return;
+    }
 
     const executeAt = new Date(
       Date.now() + nextStep.delay_days * 24 * 60 * 60 * 1000
@@ -183,7 +189,6 @@ serve(async (req) => {
       } else if (job.action_type === "invite") {
         let providerId = lead.provider_id;
 
-        // Récupère le provider_id si manquant
         if (!providerId) {
           const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "");
           const lookupRes = await unipileRequest(
@@ -232,6 +237,14 @@ serve(async (req) => {
 
       /* ── MESSAGE ── */
       } else if (job.action_type.startsWith("message")) {
+
+        // Si le lead a déjà répondu, on annule le job sans envoyer
+        if (lead.replied_at) {
+          await admin.from("campaign_jobs")
+            .update({ status: "cancelled", executed_at: now })
+            .eq("id", job.id);
+          continue;
+        }
 
         // message_1 : vérifie que la connexion est acceptée
         if (job.action_type === "message_1" && !lead.accepted_at) {
@@ -299,6 +312,8 @@ serve(async (req) => {
           console.log("[send-message]", JSON.stringify(resData));
 
           if (res.ok) {
+            const chatId: string | null = resData?.id ?? resData?.chat_id ?? null;
+
             const updateData: Record<string, string> = {
               status: `messaged_${msgNum}`,
               [`messaged_${msgNum}_at`]: now,
@@ -309,7 +324,7 @@ serve(async (req) => {
             if (job.action_type === "message_1") {
               const { data: existingLead } = await admin
                 .from("leads")
-                .select("id")
+                .select("id, unipile_chat_id")
                 .eq("owner_id", userId)
                 .eq("linkedin_url", lead.linkedin_url)
                 .single();
@@ -323,9 +338,16 @@ serve(async (req) => {
                   company_name:            lead.company_name,
                   linkedin_url:            lead.linkedin_url,
                   status:                  "conversation_engagee",
+                  outreach_type:           "message texte",
                   conversation_started_at: now,
+                  ...(chatId ? { unipile_chat_id: chatId } : {}),
                 }).select("id").single();
                 leadId = newLead?.id;
+              } else if (chatId && !existingLead?.unipile_chat_id) {
+                // Met à jour le chat_id si le lead existait déjà sans chat_id
+                await admin.from("leads")
+                  .update({ unipile_chat_id: chatId })
+                  .eq("id", leadId);
               }
 
               if (leadId) {

@@ -3,6 +3,8 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 export type AppRole = 'user' | 'coach' | 'admin';
+export type MembershipPlan = 'free' | 'starter' | 'pro' | 'coach';
+export type MembershipStatus = 'active' | 'trialing' | 'canceled' | 'past_due' | 'incomplete';
 
 type ProfileData = {
   full_name: string | null;
@@ -18,6 +20,9 @@ interface AuthContextType {
   roles: AppRole[];
   activeRole: AppRole;
   profile: ProfileData | null;
+  plan: MembershipPlan;
+  membershipStatus: MembershipStatus;
+  trialEndsAt: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -31,6 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [plan, setPlan] = useState<MembershipPlan>('free');
+  const [membershipStatus, setMembershipStatus] = useState<MembershipStatus>('trialing');
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
@@ -38,9 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await supabase.rpc('bootstrap_current_user', { _full_name: fullName ?? null });
 
-      const [rolesRes, profileRes] = await Promise.all([
+      const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
         supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed').eq('id', userId).single(),
+        (supabase as any).from('memberships').select('plan, status, trial_ends_at').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (rolesRes.data?.role) {
@@ -60,6 +69,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           onboarding_completed: profileRes.data.onboarding_completed ?? false,
         });
       }
+
+      let membership = membershipRes?.data;
+
+      // Nouvel utilisateur : crée le membership avec trial 14j
+      if (!membership) {
+        const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: created } = await (supabase as any)
+          .from('memberships')
+          .insert({ user_id: userId, plan: 'free', status: 'trialing', trial_ends_at: trialEnd })
+          .select('plan, status, trial_ends_at')
+          .single();
+        membership = created;
+      }
+
+      setPlan((membership?.plan as MembershipPlan) ?? 'free');
+      setMembershipStatus((membership?.status as MembershipStatus) ?? 'trialing');
+      setTrialEndsAt(membership?.trial_ends_at ?? null);
     } catch (err) {
       console.error('fetchUserData error:', err);
       setRoles(['user']);
@@ -128,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeRole = roles[0] || profile?.role || 'user';
 
   return (
-    <AuthContext.Provider value={{ user, session, roles, activeRole, profile, loading, signOut, refreshUserData, switchRole }}>
+    <AuthContext.Provider value={{ user, session, roles, activeRole, profile, plan, membershipStatus, trialEndsAt, loading, signOut, refreshUserData, switchRole }}>
       {children}
     </AuthContext.Provider>
   );

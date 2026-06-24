@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AuthGuard } from "@/components/AuthGuard";
+import { usePlan } from "@/hooks/usePlan";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -26,6 +27,7 @@ import SettingsPage from "./pages/Settings";
 import WorkspacePage from "./pages/Workspace";
 import LeaderboardPage from "./pages/Leaderboard";
 import BillingPage from "./pages/Billing";
+import Pricing from "./pages/Pricing";
 import Campaigns from "./pages/Campaigns";
 import CampaignNew from "./pages/CampaignNew";
 import CampaignDetail from "./pages/CampaignDetail";
@@ -45,6 +47,20 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (user) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function PlanGuard({ children }: { children: React.ReactNode }) {
+  const { hasStarterAccess } = usePlan();
+  if (!hasStarterAccess) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+function TrialGuard({ children }: { children: React.ReactNode }) {
+  const { canAccess } = usePlan();
+  const { loading } = useAuth();
+  if (loading) return null;
+  if (!canAccess) return <Navigate to="/pricing" replace />;
   return <>{children}</>;
 }
 
@@ -79,25 +95,26 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/onboarding" element={<AuthGuard><Onboarding /></AuthGuard>} />
+            <Route path="/pricing" element={<AuthGuard><Pricing /></AuthGuard>} />
 
-            <Route path="/dashboard" element={<OnboardingGuard><AuthGuard><Dashboard /></AuthGuard></OnboardingGuard>} />
-            <Route path="/leads" element={<OnboardingGuard><AuthGuard><Leads /></AuthGuard></OnboardingGuard>} />
-            <Route path="/follow-ups" element={<OnboardingGuard><AuthGuard><FollowUps /></AuthGuard></OnboardingGuard>} />
-            <Route path="/campaigns" element={<OnboardingGuard><AuthGuard><Campaigns /></AuthGuard></OnboardingGuard>} />
-            <Route path="/campaigns/new" element={<OnboardingGuard><AuthGuard><CampaignNew /></AuthGuard></OnboardingGuard>} />
-            <Route path="/campaigns/:id" element={<OnboardingGuard><AuthGuard><CampaignDetail /></AuthGuard></OnboardingGuard>} />
-            <Route path="/inbox" element={<OnboardingGuard><AuthGuard><Inbox /></AuthGuard></OnboardingGuard>} />
+            <Route path="/dashboard" element={<OnboardingGuard><AuthGuard><TrialGuard><Dashboard /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/leads" element={<OnboardingGuard><AuthGuard><TrialGuard><Leads /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/follow-ups" element={<OnboardingGuard><AuthGuard><TrialGuard><FollowUps /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns" element={<OnboardingGuard><AuthGuard><TrialGuard><Campaigns /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns/new" element={<OnboardingGuard><AuthGuard><TrialGuard><CampaignNew /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns/:id" element={<OnboardingGuard><AuthGuard><TrialGuard><CampaignDetail /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/inbox" element={<OnboardingGuard><AuthGuard><TrialGuard><Inbox /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/coach" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/coach/students/:id" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachStudentPage /></AuthGuard></OnboardingGuard>} />
-            <Route path="/leaderboard" element={<OnboardingGuard><AuthGuard><LeaderboardPage /></AuthGuard></OnboardingGuard>} />
-            <Route path="/ressources" element={<OnboardingGuard><AuthGuard><Ressources /></AuthGuard></OnboardingGuard>} />
-            <Route path="/library" element={<OnboardingGuard><AuthGuard><Library /></AuthGuard></OnboardingGuard>} />
-            <Route path="/personas" element={<OnboardingGuard><AuthGuard><PersonasPage /></AuthGuard></OnboardingGuard>} />
+            <Route path="/leaderboard" element={<OnboardingGuard><AuthGuard><TrialGuard><PlanGuard><LeaderboardPage /></PlanGuard></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/ressources" element={<OnboardingGuard><AuthGuard><TrialGuard><Ressources /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/library" element={<OnboardingGuard><AuthGuard><TrialGuard><Library /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/personas" element={<OnboardingGuard><AuthGuard><TrialGuard><PersonasPage /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/admin" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminPage /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/analytics" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminAnalytics /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/assignments" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminAssignments /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/teams" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminTeams /></AuthGuard></OnboardingGuard>} />
-            <Route path="/settings" element={<OnboardingGuard><AuthGuard><SettingsPage /></AuthGuard></OnboardingGuard>} />
+            <Route path="/settings" element={<OnboardingGuard><AuthGuard><TrialGuard><SettingsPage /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/workspace" element={<Navigate to="/settings?tab=workspace" replace />} />
             <Route path="/billing" element={<Navigate to="/settings?tab=facturation" replace />} />
 

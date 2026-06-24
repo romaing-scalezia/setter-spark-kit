@@ -45,18 +45,21 @@ serve(async (req) => {
       return jsonResponse({ received: true, error: "invalid payload" }, 200);
     }
 
-    const { status, account_id, name } = payload as {
+    const { status, event, account_id, name } = payload as {
       status?: string;
+      event?: string;
       account_id?: string;
       name?: string;
     };
 
-    if (!status || !account_id) {
+    const eventType = status ?? event ?? "";
+
+    if (!eventType || !account_id) {
       return jsonResponse({ received: true, error: "missing fields" }, 200);
     }
 
     // ── Connexion compte ──
-    if (status === "CREATION_SUCCESS" || status === "RECONNECTED") {
+    if (eventType === "CREATION_SUCCESS" || eventType === "RECONNECTED") {
       if (!name) {
         return jsonResponse({ received: true, error: "missing name (user_id)" }, 200);
       }
@@ -71,7 +74,7 @@ serve(async (req) => {
     }
 
     // ── Acceptation d'invitation LinkedIn ──
-    if (status === "INVITATION_ACCEPTED" || status === "CONNECTION_ACCEPTED") {
+    if (eventType === "INVITATION_ACCEPTED" || eventType === "CONNECTION_ACCEPTED") {
       const attendeeProviderId = (payload as any)?.provider_id
         ?? (payload as any)?.attendee?.provider_id;
       if (attendeeProviderId) {
@@ -86,20 +89,42 @@ serve(async (req) => {
     }
 
     // ── Message entrant → réponse reçue ──
-    if (status === "NEW_MESSAGE" || status === "INCOMING_MESSAGE" || status === "MESSAGE_RECEIVED") {
-      const senderProviderId = (payload as any)?.sender?.provider_id
-        ?? (payload as any)?.provider_id
-        ?? (payload as any)?.from?.provider_id;
+    if (eventType === "message_received" || eventType === "NEW_MESSAGE" || eventType === "INCOMING_MESSAGE") {
+      const networkDistance = (payload as any)?.sender?.attendee_specifics?.network_distance ?? "";
+      const isSelf = networkDistance === "SELF";
 
-      if (senderProviderId) {
-        const now = new Date().toISOString();
-        // Met à jour replied_at uniquement si pas déjà rempli et que le lead a bien reçu un message
-        await admin
-          .from("campaign_leads")
-          .update({ replied_at: now })
-          .eq("provider_id", senderProviderId)
-          .not("messaged_1_at", "is", null)
-          .is("replied_at", null);
+      if (!isSelf) {
+        const senderProviderId = (payload as any)?.sender?.attendee_provider_id
+          ?? (payload as any)?.sender?.provider_id;
+
+        if (senderProviderId) {
+          const now = new Date().toISOString();
+
+          // Récupère les leads concernés
+          const { data: matchedLeads } = await admin
+            .from("campaign_leads")
+            .select("id")
+            .eq("provider_id", senderProviderId)
+            .not("messaged_1_at", "is", null)
+            .is("replied_at", null);
+
+          if (matchedLeads && matchedLeads.length > 0) {
+            const leadIds = matchedLeads.map((l: any) => l.id);
+
+            // Marque replied + done
+            await admin
+              .from("campaign_leads")
+              .update({ replied_at: now, status: "done" })
+              .in("id", leadIds);
+
+            // Annule les jobs pending suivants
+            await admin
+              .from("campaign_jobs")
+              .update({ status: "cancelled", executed_at: now })
+              .in("campaign_lead_id", leadIds)
+              .eq("status", "pending");
+          }
+        }
       }
       return jsonResponse({ received: true, action: "replied" }, 200);
     }
@@ -108,7 +133,7 @@ serve(async (req) => {
     const { error } = await admin
       .from("unipile_accounts")
       .update({ status: "disconnected", updated_at: new Date().toISOString() })
-      .eq("account_id", account_id);
+      .eq("account_id", account_id ?? "");
 
     if (error) console.error("[unipile-webhook] update error:", error);
     return jsonResponse({ received: true, action: "disconnected" }, 200);
