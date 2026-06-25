@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePlan } from '@/hooks/usePlan';
+import { AppLayout } from '@/components/AppLayout';
 import { Loader2, Check } from 'lucide-react';
 
 const FEATURES = [
@@ -49,13 +50,8 @@ export default function Pricing() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] flex flex-col">
-      {/* Nav */}
-      <header className="flex items-center gap-2.5 px-8 py-5">
-        <LogoMark />
-        <span className="font-bold text-lg text-foreground tracking-tight">SetterFlow</span>
-      </header>
-
+    <AppLayout>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-[#F5F5F7] flex flex-col">
       {/* Main */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-3xl space-y-8 text-center">
@@ -147,5 +143,6 @@ export default function Pricing() {
         </div>
       </main>
     </div>
+    </AppLayout>
   );
 }
