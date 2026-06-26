@@ -113,7 +113,7 @@ serve(async (req) => {
     if (!nextStep) {
       // Séquence terminée → marque le lead comme done
       await admin.from("campaign_leads")
-        .update({ status: "done" })
+        .update({ status: "completed" })
         .eq("id", lead.id);
       return;
     }

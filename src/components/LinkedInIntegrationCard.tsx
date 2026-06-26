@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnipileAccount } from '@/hooks/useUnipileAccount';
 import { useToast } from '@/hooks/use-toast';
+import { LinkedInConnectDialog } from '@/components/LinkedInConnectDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,7 @@ export function LinkedInIntegrationCard() {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,30 +50,7 @@ export function LinkedInIntegrationCard() {
     };
   }, [account?.account_id]);
 
-  const handleConnect = async () => {
-    setBusy(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('unipile-proxy', {
-        body: {
-          action: 'hosted_auth',
-          notify_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/unipile-webhook`,
-          success_redirect_url: `${window.location.origin}/settings`,
-          failure_redirect_url: `${window.location.origin}/settings`,
-        },
-      });
-      if (error) throw error;
-      const url = (data as any)?.url;
-      if (!url) throw new Error("Réponse Unipile invalide (url manquante)");
-      window.location.href = url;
-    } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Connexion impossible',
-        description: err?.message ?? String(err),
-      });
-      setBusy(false);
-    }
-  };
+  const handleConnect = () => setConnectOpen(true);
 
   const handleDisconnect = async () => {
     if (!user) return;
@@ -93,6 +72,12 @@ export function LinkedInIntegrationCard() {
   const statusLabel = isConnected ? 'LinkedIn connecté' : 'LinkedIn déconnecté';
 
   return (
+    <>
+    <LinkedInConnectDialog
+      open={connectOpen}
+      onOpenChange={setConnectOpen}
+      onSuccess={refetch}
+    />
     <Card data-testid="settings-linkedin-card">
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
@@ -149,5 +134,7 @@ export function LinkedInIntegrationCard() {
         )}
       </CardContent>
     </Card>
+    </Card>
+    </>
   );
 }

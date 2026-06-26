@@ -205,6 +205,106 @@ serve(async (req) => {
         return await unipileMultipart("/api/v1/chats", fd, apiKey);
       }
 
+      case "create_account": {
+        const { username, password } = body;
+        if (!username || !password) {
+          return jsonResponse({ error: "Missing 'username' or 'password'" }, 400);
+        }
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+          ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+
+        const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts`, {
+          method: "POST",
+          headers: {
+            "X-API-KEY": apiKey,
+            "accept": "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ provider: "LINKEDIN", username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 201) {
+          const { createClient: createAdmin } = await import("https://esm.sh/@supabase/supabase-js@2");
+          const admin = createAdmin(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          await admin.from("unipile_accounts").upsert(
+            { user_id: userId, account_id: data.account_id, status: "connected", updated_at: new Date().toISOString() },
+            { onConflict: "user_id" },
+          );
+          return jsonResponse({ object: "AccountCreated", account_id: data.account_id });
+        } else if (res.status === 202) {
+          return jsonResponse(data);
+        } else {
+          return jsonResponse({ error: "Unipile error", details: data }, res.status >= 400 ? res.status : 400);
+        }
+      }
+
+      case "solve_checkpoint": {
+        const { account_id, code } = body;
+        if (!account_id || !code) {
+          return jsonResponse({ error: "Missing 'account_id' or 'code'" }, 400);
+        }
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+          ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+
+        const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts/checkpoint`, {
+          method: "POST",
+          headers: {
+            "X-API-KEY": apiKey,
+            "accept": "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ provider: "LINKEDIN", account_id, code }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.status === 200 || res.status === 201) {
+          const { createClient: createAdmin } = await import("https://esm.sh/@supabase/supabase-js@2");
+          const admin = createAdmin(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          await admin.from("unipile_accounts").upsert(
+            { user_id: userId, account_id, status: "connected", updated_at: new Date().toISOString() },
+            { onConflict: "user_id" },
+          );
+          return jsonResponse({ object: "AccountCreated", account_id });
+        } else if (res.status === 202) {
+          return jsonResponse(data);
+        } else {
+          return jsonResponse({ error: "Unipile error", details: data }, res.status >= 400 ? res.status : 400);
+        }
+      }
+
+      case "resend_checkpoint": {
+        const { account_id } = body;
+        if (!account_id) return jsonResponse({ error: "Missing 'account_id'" }, 400);
+        const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts/checkpoint/resend`, {
+          method: "POST",
+          headers: {
+            "X-API-KEY": apiKey,
+            "accept": "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ provider: "LINKEDIN", account_id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        return jsonResponse(data, res.ok ? 200 : res.status);
+      }
+
+      case "get_account_status": {
+        const { account_id } = body;
+        if (!account_id) return jsonResponse({ error: "Missing 'account_id'" }, 400);
+        return await unipileJson(
+          `/api/v1/accounts/${encodeURIComponent(account_id)}`,
+          { method: "GET" },
+          apiKey,
+        );
+      }
+
       default:
         return jsonResponse({ error: `Unknown action: ${action}` }, 400);
     }

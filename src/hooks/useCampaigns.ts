@@ -57,7 +57,7 @@ export function useCampaigns() {
           persona_name: r.persona_id ? (personaMap.get(r.persona_id) ?? null) : null,
           created_at: r.created_at,
           total_leads: leads.length,
-          done_leads: leads.filter((l) => l.status === 'done').length,
+          done_leads: leads.filter((l) => l.status === 'completed').length,
         };
       });
     },

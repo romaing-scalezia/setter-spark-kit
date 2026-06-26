@@ -114,7 +114,7 @@ serve(async (req) => {
             // Marque replied + done
             await admin
               .from("campaign_leads")
-              .update({ replied_at: now, status: "done" })
+              .update({ replied_at: now, status: "completed" })
               .in("id", leadIds);
 
             // Annule les jobs pending suivants

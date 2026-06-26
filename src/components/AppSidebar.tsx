@@ -170,7 +170,7 @@ function FreePlanCard({ collapsed }: { collapsed: boolean }) {
 }
 
 function UserRow({ collapsed }: { collapsed: boolean }) {
-  const { user, profile } = useAuth();
+  const { user, profile, signOut } = useAuth();
   if (!user) return null;
 
   const name = profile?.full_name || user.email || '';
@@ -195,10 +195,23 @@ function UserRow({ collapsed }: { collapsed: boolean }) {
         {initials}
       </span>
       {!collapsed && (
-        <div className="min-w-0">
-          <p className="truncate text-[12.5px] font-bold" style={{ color: '#15161A' }}>{name}</p>
-          <p className="truncate text-[10.5px]" style={{ color: '#9A9EA8' }}>{email}</p>
-        </div>
+        <>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12.5px] font-bold" style={{ color: '#15161A' }}>{name}</p>
+            <p className="truncate text-[10.5px]" style={{ color: '#9A9EA8' }}>{email}</p>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            title="Se déconnecter"
+            className="shrink-0 rounded-md p-1 transition-colors hover:bg-black/5"
+            style={{ color: '#9A9EA8' }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+          </button>
+        </>
       )}
     </div>
   );

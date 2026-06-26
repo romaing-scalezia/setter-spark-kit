@@ -23,11 +23,17 @@ serve(async (req) => {
     const sig = req.headers.get("stripe-signature") ?? "";
     let event: Stripe.Event;
 
-    try {
-      event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-    } catch (err) {
-      console.error("[stripe-webhook] Invalid signature:", err);
-      return new Response("Invalid signature", { status: 400 });
+    const skipSig = Deno.env.get("STRIPE_SKIP_SIG") === "true";
+    if (skipSig) {
+      event = JSON.parse(body) as Stripe.Event;
+      console.log("[stripe-webhook] signature check skipped (dev mode)");
+    } else {
+      try {
+        event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
+      } catch (err) {
+        console.error("[stripe-webhook] Invalid signature:", err);
+        return new Response("Invalid signature", { status: 400 });
+      }
     }
 
     console.log("[stripe-webhook] event:", event.type);
