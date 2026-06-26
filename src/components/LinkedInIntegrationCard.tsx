@@ -134,7 +134,6 @@ export function LinkedInIntegrationCard() {
         )}
       </CardContent>
     </Card>
-    </Card>
     </>
   );
 }
