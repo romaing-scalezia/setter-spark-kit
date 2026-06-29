@@ -59,6 +59,7 @@ async function unipileMultipart(path: string, formData: FormData, apiKey: string
   return jsonResponse(data, 200);
 }
 
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -226,8 +227,7 @@ serve(async (req) => {
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 201) {
-          const { createClient: createAdmin } = await import("https://esm.sh/@supabase/supabase-js@2");
-          const admin = createAdmin(supabaseUrl, serviceRoleKey, {
+          const admin = createClient(supabaseUrl, serviceRoleKey, {
             auth: { autoRefreshToken: false, persistSession: false },
           });
           await admin.from("unipile_accounts").upsert(
@@ -263,15 +263,15 @@ serve(async (req) => {
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 200 || res.status === 201) {
-          const { createClient: createAdmin } = await import("https://esm.sh/@supabase/supabase-js@2");
-          const admin = createAdmin(supabaseUrl, serviceRoleKey, {
+          const connectedId = data.account_id ?? account_id;
+          const admin = createClient(supabaseUrl, serviceRoleKey, {
             auth: { autoRefreshToken: false, persistSession: false },
           });
           await admin.from("unipile_accounts").upsert(
-            { user_id: userId, account_id, status: "connected", updated_at: new Date().toISOString() },
+            { user_id: userId, account_id: connectedId, status: "connected", updated_at: new Date().toISOString() },
             { onConflict: "user_id" },
           );
-          return jsonResponse({ object: "AccountCreated", account_id });
+          return jsonResponse({ object: "AccountCreated", account_id: connectedId });
         } else if (res.status === 202) {
           return jsonResponse(data);
         } else {
@@ -293,6 +293,10 @@ serve(async (req) => {
         });
         const data = await res.json().catch(() => ({}));
         return jsonResponse(data, res.ok ? 200 : res.status);
+      }
+
+      case "list_accounts": {
+        return await unipileJson("/api/v1/accounts?limit=50", { method: "GET" }, apiKey);
       }
 
       case "get_account_status": {

@@ -43,7 +43,15 @@ export function LinkedInIntegrationCard() {
         return;
       }
       const d = data as any;
-      setDisplayName(d?.name ?? d?.display_name ?? null);
+      console.log('[unipile account]', JSON.stringify(d));
+      setDisplayName(
+        d?.name ??
+        d?.display_name ??
+        d?.connection_params?.name ??
+        d?.connection_params?.username ??
+        d?.username ??
+        null
+      );
     })();
     return () => {
       cancelled = true;
