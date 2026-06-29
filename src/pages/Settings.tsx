@@ -106,10 +106,6 @@ export default function SettingsPage() {
                   <Label>Nom complet</Label>
                   <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
-                <div className="space-y-2">
-                  <Label>Rôle actuel</Label>
-                  <Input value={activeRole} disabled />
-                </div>
                 <Button onClick={handleSave} disabled={loading} data-testid="settings-save">
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Enregistrer

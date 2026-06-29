@@ -27,7 +27,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const PLAN_LABELS: Record<string, string> = {
   free: 'Essai gratuit',
-  starter: 'SetterFlow — 30€/mois',
+  starter: '30€/mois',
   pro: 'Pro',
   coach: 'Coach',
 };

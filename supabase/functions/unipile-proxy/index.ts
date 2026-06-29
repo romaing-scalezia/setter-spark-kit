@@ -215,11 +215,6 @@ serve(async (req) => {
           ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
-        const reqBody = { provider: "LINKEDIN", username, password };
-        console.log("[create_account] POST /api/v1/accounts body:", JSON.stringify(reqBody));
-        console.log("[create_account] UNIPILE_BASE_URL:", UNIPILE_BASE_URL);
-        console.log("[create_account] API key prefix:", apiKey?.slice(0, 8));
-
         const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts`, {
           method: "POST",
           headers: {
@@ -227,32 +222,26 @@ serve(async (req) => {
             "accept": "application/json",
             "content-type": "application/json",
           },
-          body: JSON.stringify(reqBody),
+          body: JSON.stringify({ provider: "LINKEDIN", username, password }),
         });
-        const rawText = await res.text();
-        console.log("[create_account] Unipile status:", res.status);
-        console.log("[create_account] Unipile response:", rawText);
+        const data = await res.json().catch(() => ({}));
 
-        let data: any = {};
-        try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { raw: rawText }; }
-
-        if (res.status === 201) {
-          console.log("[create_account] Success, account_id:", data.account_id);
-          const admin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          });
-          await admin.from("unipile_accounts").upsert(
-            { user_id: userId, account_id: data.account_id, status: "connected", updated_at: new Date().toISOString() },
-            { onConflict: "user_id" },
-          );
-          return jsonResponse({ object: "AccountCreated", account_id: data.account_id });
-        } else if (res.status === 202) {
-          console.log("[create_account] Checkpoint required:", data?.checkpoint?.type);
-          return jsonResponse(data);
-        } else {
-          console.log("[create_account] Error from Unipile:", res.status, rawText);
-          return jsonResponse({ error: "Unipile error", details: data }, res.status >= 400 ? res.status : 400);
+        if (!res.ok) {
+          return jsonResponse({ error: "Unipile error", details: data }, res.status);
         }
+
+        // Unipile retourne 201 pour AccountCreated ET Checkpoint — brancher sur data.object
+        if (data?.object === "Checkpoint") {
+          return jsonResponse(data);
+        }
+        const admin = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await admin.from("unipile_accounts").upsert(
+          { user_id: userId, account_id: data.account_id, status: "connected", updated_at: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+        return jsonResponse({ object: "AccountCreated", account_id: data.account_id });
       }
 
       case "solve_checkpoint": {
@@ -275,21 +264,23 @@ serve(async (req) => {
         });
         const data = await res.json().catch(() => ({}));
 
-        if (res.status === 200 || res.status === 201) {
-          const connectedId = data.account_id ?? account_id;
-          const admin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          });
-          await admin.from("unipile_accounts").upsert(
-            { user_id: userId, account_id: connectedId, status: "connected", updated_at: new Date().toISOString() },
-            { onConflict: "user_id" },
-          );
-          return jsonResponse({ object: "AccountCreated", account_id: connectedId });
-        } else if (res.status === 202) {
-          return jsonResponse(data);
-        } else {
-          return jsonResponse({ error: "Unipile error", details: data }, res.status >= 400 ? res.status : 400);
+        if (!res.ok) {
+          return jsonResponse({ error: "Unipile error", details: data }, res.status);
         }
+
+        if (data?.object === "Checkpoint") {
+          return jsonResponse(data);
+        }
+
+        const connectedId = data.account_id ?? account_id;
+        const admin2 = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await admin2.from("unipile_accounts").upsert(
+          { user_id: userId, account_id: connectedId, status: "connected", updated_at: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+        return jsonResponse({ object: "AccountCreated", account_id: connectedId });
       }
 
       case "resend_checkpoint": {

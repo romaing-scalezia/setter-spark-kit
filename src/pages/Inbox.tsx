@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
+import { FollowUpDateModal } from '@/components/FollowUpDateModal';
+import { format } from 'date-fns';
 import { type Lead, type LeadStatus } from '@/lib/constants';
 
 function getAttendeeProviderId(c: UnipileConversation): string | null {
@@ -208,10 +210,10 @@ function useAllLinkedLeads(chatIds: string[]) {
     enabled: chatIds.length > 0,
     queryFn: async () => {
       const { data, error } = await (supabase.from('leads') as any)
-        .select('id, unipile_chat_id')
+        .select('id, unipile_chat_id, status, follow_up_date')
         .in('unipile_chat_id', chatIds);
       if (error) throw error;
-      const map: Record<string, { id: string }> = {};
+      const map: Record<string, { id: string; status: string; follow_up_date: string | null }> = {};
       for (const l of data ?? []) map[l.unipile_chat_id] = l;
       return map;
     },
@@ -235,6 +237,7 @@ function useFullLead(leadId: string | null, enabled: boolean) {
 
 export default function Inbox() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
   const { account, loading: accountLoading } = useUnipileAccount();
@@ -245,6 +248,7 @@ export default function Inbox() {
   const [linkOpen, setLinkOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [followUpDateOpen, setFollowUpDateOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'hot' | 'followup'>('all');
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
@@ -272,6 +276,14 @@ export default function Inbox() {
     hasMore,
     loadMore,
   } = useUnipileConversations(account?.account_id ?? null);
+  // Auto-select conversation from ?chat= param (e.g. from Dashboard CTA)
+  useEffect(() => {
+    const chatId = searchParams.get('chat');
+    if (!chatId || !conversations.length || selected) return;
+    const match = conversations.find((c) => c.id === chatId);
+    if (match) handleSelectConversation(match);
+  }, [searchParams, conversations]);
+
   const { messages, loading: msgsLoading, refetch: refetchMessages } =
     useUnipileMessages(selected?.id ?? null);
   const { data: linkedLead, isFetching: linkedLeadLoading, refetch: refetchLinked } = useLinkedLead(selected?.id ?? null);
@@ -304,6 +316,16 @@ export default function Inbox() {
     }
     if (activeFilter === 'unread') list = list.filter((c) => Number((c.raw as any)?.unread_count ?? 0) > 0);
     if (activeFilter === 'hot') list = list.filter((c) => !!allLinkedLeads[c.id]);
+    if (activeFilter === 'followup') {
+      const today = new Date().toISOString().slice(0, 10);
+      list = list.filter((c) => {
+        const lead = allLinkedLeads[c.id];
+        if (!lead) return false;
+        if (lead.status !== 'follow_up') return false;
+        if (!lead.follow_up_date) return true; // no date = due now
+        return lead.follow_up_date <= today;
+      });
+    }
     return list;
   }, [sortedConvos, search, activeFilter, allLinkedLeads]);
 
@@ -311,9 +333,14 @@ export default function Inbox() {
 
   const handleStatusChange = async (status: LeadStatus) => {
     if (!linkedLead) return;
+    if (status === 'follow_up') {
+      setFollowUpDateOpen(true);
+      return;
+    }
     await (supabase.from('leads') as any).update({ status }).eq('id', linkedLead.id);
     queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
     queryClient.invalidateQueries({ queryKey: ['leads'] });
+    queryClient.invalidateQueries({ queryKey: ['all-linked-leads'] });
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -637,6 +664,20 @@ export default function Inbox() {
           }}
         />
       )}
+      <FollowUpDateModal
+        open={followUpDateOpen}
+        onOpenChange={setFollowUpDateOpen}
+        onSubmit={async (date) => {
+          if (!linkedLead) return;
+          await (supabase.from('leads') as any)
+            .update({ status: 'follow_up', follow_up_date: format(date, 'yyyy-MM-dd') })
+            .eq('id', linkedLead.id);
+          setFollowUpDateOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+          queryClient.invalidateQueries({ queryKey: ['all-linked-leads'] });
+        }}
+      />
     </AppLayout>
   );
 }

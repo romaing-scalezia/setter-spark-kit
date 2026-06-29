@@ -241,7 +241,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Link to="/inbox">
+                  <Link to={`/inbox${(mainAction.lead as any).unipile_chat_id ? `?chat=${(mainAction.lead as any).unipile_chat_id}` : ''}`}>
                     <Button size="sm">Ouvrir la conversation</Button>
                   </Link>
                   <Button size="sm" variant="outline" onClick={() => skipLead(mainAction.lead.id)}>

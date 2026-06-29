@@ -86,17 +86,17 @@ const SCENARIOS: Array<{
 }> = [
   {
     type: 'A',
-    description: '3 étapes — idéal pour débuter',
+    description: 'idéal pour débuter',
     steps: ['Visite', 'Invitation', 'Message 1'],
   },
   {
     type: 'B',
-    description: '4 étapes — suivi renforcé',
+    description: 'suivi renforcé',
     steps: ['Visite', 'Invitation', 'Message 1', 'Message 2'],
   },
   {
     type: 'C',
-    description: '5 étapes — séquence complète',
+    description: 'séquence complète',
     steps: ['Visite', 'Invitation', 'Message 1', 'Message 2', 'Message 3'],
   },
 ];
@@ -362,7 +362,7 @@ export default function CampaignNew() {
                     </div>
                     <div className="space-y-1.5">
                       <p className="text-sm font-semibold text-foreground">
-                        Scénario {s.type} — {s.description}
+                        Scénario {s.type} - {s.steps.length} étape{s.steps.length > 1 ? 's' : ''} <span className="font-normal text-muted-foreground">({s.description})</span>
                       </p>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {s.steps.map((label, i) => (

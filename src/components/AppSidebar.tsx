@@ -52,11 +52,11 @@ function LogoMark() {
 type NavDef = { title: string; url: string; icon: string; roles: string[]; badge?: string };
 
 const navMain: NavDef[] = [
-  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',  roles: ['user', 'admin'] },
-  { title: 'Inbox',      url: '/inbox',       icon: 'inbox', roles: ['user', 'admin'] },
-  { title: 'Leads',      url: '/leads',       icon: 'leads', roles: ['user', 'admin'] },
-  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',      roles: ['user', 'admin'] },
-  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone',  roles: ['user', 'admin'] },
+  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',      roles: ['user', 'admin'] },
+  { title: 'Inbox',      url: '/inbox',       icon: 'inbox',     roles: ['user', 'admin'] },
+  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'admin'] },
+  { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'admin'] },
+  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'admin'] },
 ];
 
 const navResources: NavDef[] = [
