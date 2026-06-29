@@ -215,6 +215,11 @@ serve(async (req) => {
           ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
+        const reqBody = { provider: "LINKEDIN", username, password };
+        console.log("[create_account] POST /api/v1/accounts body:", JSON.stringify(reqBody));
+        console.log("[create_account] UNIPILE_BASE_URL:", UNIPILE_BASE_URL);
+        console.log("[create_account] API key prefix:", apiKey?.slice(0, 8));
+
         const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts`, {
           method: "POST",
           headers: {
@@ -222,11 +227,17 @@ serve(async (req) => {
             "accept": "application/json",
             "content-type": "application/json",
           },
-          body: JSON.stringify({ provider: "LINKEDIN", username, password }),
+          body: JSON.stringify(reqBody),
         });
-        const data = await res.json().catch(() => ({}));
+        const rawText = await res.text();
+        console.log("[create_account] Unipile status:", res.status);
+        console.log("[create_account] Unipile response:", rawText);
+
+        let data: any = {};
+        try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { raw: rawText }; }
 
         if (res.status === 201) {
+          console.log("[create_account] Success, account_id:", data.account_id);
           const admin = createClient(supabaseUrl, serviceRoleKey, {
             auth: { autoRefreshToken: false, persistSession: false },
           });
@@ -236,8 +247,10 @@ serve(async (req) => {
           );
           return jsonResponse({ object: "AccountCreated", account_id: data.account_id });
         } else if (res.status === 202) {
+          console.log("[create_account] Checkpoint required:", data?.checkpoint?.type);
           return jsonResponse(data);
         } else {
+          console.log("[create_account] Error from Unipile:", res.status, rawText);
           return jsonResponse({ error: "Unipile error", details: data }, res.status >= 400 ? res.status : 400);
         }
       }
