@@ -317,14 +317,7 @@ export default function Inbox() {
     if (activeFilter === 'unread') list = list.filter((c) => Number((c.raw as any)?.unread_count ?? 0) > 0);
     if (activeFilter === 'hot') list = list.filter((c) => !!allLinkedLeads[c.id]);
     if (activeFilter === 'followup') {
-      const today = new Date().toISOString().slice(0, 10);
-      list = list.filter((c) => {
-        const lead = allLinkedLeads[c.id];
-        if (!lead) return false;
-        if (lead.status !== 'follow_up') return false;
-        if (!lead.follow_up_date) return true; // no date = due now
-        return lead.follow_up_date <= today;
-      });
+      list = list.filter((c) => allLinkedLeads[c.id]?.status === 'follow_up');
     }
     return list;
   }, [sortedConvos, search, activeFilter, allLinkedLeads]);
