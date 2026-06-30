@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ export default function Register() {
   const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const source = searchParams.get('source') ?? 'organic';
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +37,7 @@ export default function Register() {
         email,
         password,
         options: {
-          data: { full_name: fullName },
+          data: { full_name: fullName, source },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });

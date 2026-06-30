@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Link2, CheckCheck, User, Search } from 'lucide-react';
+import { Loader2, Send, Link2, CheckCheck, User, Search, Mic, MicOff, Video, X, Play, Pause } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -250,6 +250,16 @@ export default function Inbox() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [followUpDateOpen, setFollowUpDateOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'hot' | 'followup'>('all');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [sendingMedia, setSendingMedia] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
@@ -334,6 +344,96 @@ export default function Inbox() {
     queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
     queryClient.invalidateQueries({ queryKey: ['leads'] });
     queryClient.invalidateQueries({ queryKey: ['all-linked-leads'] });
+  };
+
+  const discardAudio = () => {
+    setAudioBlob(null);
+    if (audioUrl) { URL.revokeObjectURL(audioUrl); setAudioUrl(null); }
+    setIsPlaying(false);
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunksRef.current = [];
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setAudioBlob(blob);
+        setAudioUrl(url);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch {
+      toast({ variant: 'destructive', title: 'Micro inaccessible', description: 'Autorisez l\'accès au microphone.' });
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  const togglePlayback = () => {
+    if (!audioUrl) return;
+    if (!audioRef.current) { audioRef.current = new Audio(audioUrl); audioRef.current.onended = () => setIsPlaying(false); }
+    if (isPlaying) { audioRef.current.pause(); setIsPlaying(false); }
+    else { audioRef.current.play(); setIsPlaying(true); }
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!selected || !audioBlob) return;
+    setSendingMedia(true);
+    const fd = new FormData();
+    fd.append('action', 'send_voice_message');
+    fd.append('chat_id', selected.id);
+    fd.append('file', audioBlob, 'voice.webm');
+    const { data: { session: s } } = await supabase.auth.getSession();
+    const supabaseUrl = (supabase as any).supabaseUrl as string;
+    const res = await fetch(`${supabaseUrl}/functions/v1/unipile-proxy`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${s?.access_token}` },
+      body: fd,
+    });
+    setSendingMedia(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ variant: 'destructive', title: 'Envoi échoué', description: (err as any)?.error ?? 'Erreur inconnue' });
+      return;
+    }
+    discardAudio();
+    refetchMessages();
+  };
+
+  const sendVideoMessage = async (file: File) => {
+    if (!selected) return;
+    setSendingMedia(true);
+    const fd = new FormData();
+    fd.append('action', 'send_video_message');
+    fd.append('chat_id', selected.id);
+    fd.append('file', file, file.name);
+    const { data: { session: s } } = await supabase.auth.getSession();
+    const supabaseUrl = (supabase as any).supabaseUrl as string;
+    const res = await fetch(`${supabaseUrl}/functions/v1/unipile-proxy`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${s?.access_token}` },
+      body: fd,
+    });
+    setSendingMedia(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ variant: 'destructive', title: 'Envoi vidéo échoué', description: (err as any)?.error ?? 'Erreur inconnue' });
+      return;
+    }
+    refetchMessages();
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -569,24 +669,64 @@ export default function Inbox() {
                     </button>
                   ))}
                 </div>
-                <form onSubmit={handleSend} className="flex items-end gap-2 p-3 pt-1">
-                  <Textarea
-                    placeholder="Votre message..."
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    disabled={sending}
-                    rows={1}
-                    className="max-h-[120px] resize-none"
-                    onInput={(e) => {
-                      const el = e.currentTarget;
-                      el.style.height = 'auto';
-                      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-                    }}
-                  />
-                  <Button type="submit" size="icon" className="h-10 w-10 shrink-0" disabled={sending || !text.trim()}>
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </form>
+                {audioBlob ? (
+                  <div className="flex items-center gap-2 p-3 pt-1">
+                    <div className="flex flex-1 items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+                      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={togglePlayback}>
+                        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                      <div className="flex-1 h-1.5 rounded-full bg-primary/20">
+                        <div className="h-full w-1/3 rounded-full bg-primary" />
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums">{recordingSeconds}s</span>
+                    </div>
+                    <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0 text-muted-foreground" onClick={discardAudio}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" size="icon" className="h-10 w-10 shrink-0" disabled={sendingMedia} onClick={sendVoiceMessage}>
+                      {sendingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSend} className="flex items-end gap-2 p-3 pt-1">
+                    <Textarea
+                      placeholder="Votre message..."
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      disabled={sending || isRecording}
+                      rows={1}
+                      className="max-h-[120px] resize-none"
+                      onInput={(e) => {
+                        const el = e.currentTarget;
+                        el.style.height = 'auto';
+                        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                      }}
+                    />
+                    {isRecording ? (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-destructive tabular-nums animate-pulse">{recordingSeconds}s</span>
+                        <Button type="button" size="icon" variant="destructive" className="h-10 w-10" onClick={stopRecording}>
+                          <MicOff className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button type="button" size="icon" variant="ghost" className="h-10 w-10" title="Message vocal" onClick={startRecording} disabled={sending}>
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                        <label title="Message vidéo (LinkedIn uniquement)">
+                          <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendVideoMessage(f); e.target.value = ''; }} disabled={sendingMedia} />
+                          <Button type="button" size="icon" variant="ghost" className="h-10 w-10" asChild>
+                            <span><Video className="h-4 w-4" /></span>
+                          </Button>
+                        </label>
+                        <Button type="submit" size="icon" className="h-10 w-10" disabled={sending || !text.trim()}>
+                          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    )}
+                  </form>
+                )}
               </div>
             </>
           )}

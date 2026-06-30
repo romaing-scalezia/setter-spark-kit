@@ -12,6 +12,7 @@ type ProfileData = {
   role: AppRole | null;
   debug_role_switch_enabled: boolean;
   onboarding_completed: boolean;
+  source: string | null;
 };
 
 interface AuthContextType {
@@ -42,13 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
-  const fetchUserData = useCallback(async (userId: string, fullName?: string | null) => {
+  const fetchUserData = useCallback(async (userId: string, fullName?: string | null, source?: string | null) => {
     try {
       await supabase.rpc('bootstrap_current_user', { _full_name: fullName ?? null });
 
+      // Persist source from signup URL if provided and profile doesn't have one yet
+      if (source && source !== 'organic') {
+        await (supabase as any).from('profiles').update({ source }).eq('id', userId).is('source', null);
+      }
+
       const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
-        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed').eq('id', userId).single(),
+        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source').eq('id', userId).single(),
         (supabase as any).from('memberships').select('plan, status, trial_ends_at').eq('user_id', userId).maybeSingle(),
       ]);
 
@@ -67,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: profileRes.data.role as AppRole | null,
           debug_role_switch_enabled: profileRes.data.debug_role_switch_enabled ?? false,
           onboarding_completed: profileRes.data.onboarding_completed ?? false,
+          source: (profileRes.data as any).source ?? null,
         });
       }
 
@@ -103,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
-        await fetchUserData(currentSession.user.id, currentSession.user.user_metadata?.full_name ?? null);
+        await fetchUserData(currentSession.user.id, currentSession.user.user_metadata?.full_name ?? null, currentSession.user.user_metadata?.source ?? null);
       }
       setLoading(false);
       initializedRef.current = true;
@@ -128,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fire and forget - do NOT await inside onAuthStateChange
       if (initializedRef.current) {
         // Only fetch user data on subsequent auth changes (not initial load)
-        fetchUserData(nextSession.user.id, nextSession.user.user_metadata?.full_name ?? null);
+        fetchUserData(nextSession.user.id, nextSession.user.user_metadata?.full_name ?? null, nextSession.user.user_metadata?.source ?? null);
       }
     });
 

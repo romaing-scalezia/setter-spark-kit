@@ -1,9 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 
-const STARTER_PLANS = ['starter', 'pro', 'coach'] as const;
-
 export function usePlan() {
-  const { plan, membershipStatus, trialEndsAt, activeRole } = useAuth();
+  const { plan, membershipStatus, trialEndsAt, activeRole, profile } = useAuth();
 
   const isPrivilegedRole = activeRole === 'coach' || activeRole === 'admin';
 
@@ -18,8 +16,8 @@ export function usePlan() {
   // Peut accéder à l'app : trial en cours OU abonnement actif OU rôle privilégié
   const canAccess = isPrivilegedRole || isActive || (isTrialing && !trialExpired);
 
-  // Accès aux features StarterPack (leaderboard, notes coach)
-  const hasStarterAccess = isPrivilegedRole || STARTER_PLANS.includes(plan as any);
+  // Accès aux features StarterPack (leaderboard, notes coach) : rôle privilégié OU source starterpack
+  const hasStarterAccess = isPrivilegedRole || profile?.source === 'starterpack';
 
   return { plan, membershipStatus, isTrialing, trialExpired, trialDaysLeft, isActive, canAccess, hasStarterAccess };
 }

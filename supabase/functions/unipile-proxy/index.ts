@@ -97,8 +97,18 @@ serve(async (req) => {
     }
     const userId = userData.user.id;
 
-    // --- Parse body ---
-    const body = await req.json().catch(() => ({}));
+    // --- Parse body (JSON or multipart) ---
+    let body: Record<string, unknown> = {};
+    let incomingForm: FormData | null = null;
+    const contentType = req.headers.get("content-type") ?? "";
+    if (contentType.includes("multipart/form-data")) {
+      incomingForm = await req.formData();
+      for (const [k, v] of incomingForm.entries()) {
+        if (typeof v === "string") body[k] = v;
+      }
+    } else {
+      body = await req.json().catch(() => ({}));
+    }
     const action = body?.action as string | undefined;
     if (!action) {
       return jsonResponse({ error: "Missing 'action' in body" }, 400);
@@ -297,6 +307,36 @@ serve(async (req) => {
         });
         const data = await res.json().catch(() => ({}));
         return jsonResponse(data, res.ok ? 200 : res.status);
+      }
+
+      case "send_voice_message": {
+        const { chat_id } = body as { chat_id?: string };
+        if (!chat_id) return jsonResponse({ error: "Missing 'chat_id'" }, 400);
+        if (!incomingForm) return jsonResponse({ error: "Expected multipart/form-data" }, 400);
+        const file = incomingForm.get("file") as File | null;
+        if (!file) return jsonResponse({ error: "Missing 'file'" }, 400);
+        const fd = new FormData();
+        fd.append("voice_message", file, file.name || "voice.m4a");
+        return await unipileMultipart(
+          `/api/v1/chats/${encodeURIComponent(chat_id)}/messages`,
+          fd,
+          apiKey,
+        );
+      }
+
+      case "send_video_message": {
+        const { chat_id } = body as { chat_id?: string };
+        if (!chat_id) return jsonResponse({ error: "Missing 'chat_id'" }, 400);
+        if (!incomingForm) return jsonResponse({ error: "Expected multipart/form-data" }, 400);
+        const file = incomingForm.get("file") as File | null;
+        if (!file) return jsonResponse({ error: "Missing 'file'" }, 400);
+        const fd = new FormData();
+        fd.append("video_message", file, file.name || "video.mp4");
+        return await unipileMultipart(
+          `/api/v1/chats/${encodeURIComponent(chat_id)}/messages`,
+          fd,
+          apiKey,
+        );
       }
 
       case "list_accounts": {
