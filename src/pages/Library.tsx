@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -34,10 +35,19 @@ export function LibraryContent() {
   const { toast } = useToast();
   const isCoachOrAdmin = activeRole === 'coach' || activeRole === 'admin';
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<string>('script');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Auto-open create form when ?new=1 is in URL
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setCreateOpen(true);
+      setSearchParams((p) => { p.delete('new'); return p; }, { replace: true });
+    }
+  }, []);
   const [editingContent, setEditingContent] = useState<CoachingContent | null>(null);
   const [selectedContent, setSelectedContent] = useState<CoachingContent | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);

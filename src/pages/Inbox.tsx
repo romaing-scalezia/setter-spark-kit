@@ -19,7 +19,7 @@ import {
 } from '@/hooks/useUnipileConversations';
 import { useUnipileMessages } from '@/hooks/useUnipileMessages';
 import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
-import { useAttendeeName } from '@/hooks/useAttendeeNames';
+import { useAttendeeName, getCachedAttendeeName } from '@/hooks/useAttendeeNames';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
@@ -27,6 +27,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { FollowUpDateModal } from '@/components/FollowUpDateModal';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { type Lead, type LeadStatus } from '@/lib/constants';
 
 function getAttendeeProviderId(c: UnipileConversation): string | null {
@@ -249,7 +250,7 @@ export default function Inbox() {
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [followUpDateOpen, setFollowUpDateOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'hot' | 'followup'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'appel_propose' | 'followup'>('all');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -322,17 +323,34 @@ export default function Inbox() {
     let list = sortedConvos;
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter((c) => (c.name ?? '').toLowerCase().includes(q));
+      list = list.filter((c) => {
+        const attendeeId = getAttendeeProviderId(c);
+        const resolvedName = getCachedAttendeeName(attendeeId) ?? c.name ?? '';
+        return resolvedName.toLowerCase().includes(q);
+      });
     }
     if (activeFilter === 'unread') list = list.filter((c) => Number((c.raw as any)?.unread_count ?? 0) > 0);
-    if (activeFilter === 'hot') list = list.filter((c) => !!allLinkedLeads[c.id]);
-    if (activeFilter === 'followup') {
-      list = list.filter((c) => allLinkedLeads[c.id]?.status === 'follow_up');
-    }
+    if (activeFilter === 'appel_propose') list = list.filter((c) => allLinkedLeads[c.id]?.status === 'appel_propose');
+    if (activeFilter === 'followup') list = list.filter((c) => allLinkedLeads[c.id]?.status === 'follow_up');
     return list;
   }, [sortedConvos, search, activeFilter, allLinkedLeads]);
 
   const { data: fullLead } = useFullLead(linkedLead?.id ?? null, drawerOpen);
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ['inbox-templates', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('coaching_contents')
+        .select('id, title, body')
+        .or(`owner_id.eq.${user!.id},target_user_id.eq.${user!.id},is_global.eq.true`)
+        .in('type', ['script', 'objection', 'recommendation'])
+        .order('updated_at', { ascending: false })
+        .limit(8);
+      return (data ?? []) as { id: string; title: string; body: string }[];
+    },
+  });
 
   const handleStatusChange = async (status: LeadStatus) => {
     if (!linkedLead) return;
@@ -489,7 +507,7 @@ export default function Inbox() {
               />
             </div>
             <div className="flex gap-1.5 flex-wrap">
-              {(['all', 'unread', 'hot', 'followup'] as const).map((f) => (
+              {(['all', 'unread', 'appel_propose', 'followup'] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setActiveFilter(f)}
@@ -499,7 +517,7 @@ export default function Inbox() {
                       : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   }`}
                 >
-                  {f === 'all' ? 'Tous' : f === 'unread' ? 'Non lus' : f === 'hot' ? '🔥 Chauds' : 'À relancer'}
+                  {f === 'all' ? 'Tous' : f === 'unread' ? 'Non lus' : f === 'appel_propose' ? 'Appel proposé' : 'À relancer'}
                 </button>
               ))}
             </div>
@@ -657,17 +675,26 @@ export default function Inbox() {
 
               <div className="border-t">
                 <div className="flex items-center gap-2 overflow-x-auto px-3 pt-2 pb-1">
-                  <span className="shrink-0 text-xs text-muted-foreground">✦ Suggestions</span>
-                  {['Proposer un créneau', 'Répondre chaleureusement', 'Template : Closing'].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setText(s)}
-                      className="shrink-0 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+                  <span className="shrink-0 text-xs text-muted-foreground">✦ Templates</span>
+                  {templates.length === 0 ? (
+                    <Link
+                      to="/ressources?tab=scripts&new=1"
+                      className="shrink-0 rounded-full border border-dashed border-primary/40 px-3 py-1 text-xs text-primary hover:bg-primary/5 transition-colors"
                     >
-                      {s}
-                    </button>
-                  ))}
+                      + Créer mes templates
+                    </Link>
+                  ) : (
+                    templates.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setText(t.body)}
+                        className="shrink-0 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        {t.title}
+                      </button>
+                    ))
+                  )}
                 </div>
                 {audioBlob ? (
                   <div className="flex items-center gap-2 p-3 pt-1">

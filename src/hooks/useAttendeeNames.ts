@@ -139,6 +139,14 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
   };
 }
 
+export function getCachedAttendeeName(attendeeId: string | null | undefined): string | null {
+  if (!attendeeId) return null;
+  const entry = cache.get(attendeeId);
+  if (!entry || entry.status !== 'loaded' || !entry.info) return null;
+  const { first_name, last_name } = entry.info;
+  return [first_name, last_name].filter(Boolean).join(' ').trim() || null;
+}
+
 export function useAttendeeNamesPrefetch(ids: Array<string | null | undefined>) {
   const seen = useRef<Set<string>>(new Set());
   useEffect(() => {
