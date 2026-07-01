@@ -629,12 +629,12 @@ export default function Leads() {
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>
           <TabsList className="flex-wrap h-auto gap-1 bg-primary/5 border border-primary/30">
             {STATUS_TABS.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="text-xs">
+              <TabsTrigger key={tab.value} value={tab.value} className="text-xs data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none">
                 {tab.label}
                 {tab.value !== 'all' && tabCounts[tab.value] ? (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">{tabCounts[tab.value]}</span>
+                  <span className="ml-1.5 rounded-full bg-black/10 px-1.5 text-[10px] font-medium">{tabCounts[tab.value]}</span>
                 ) : tab.value === 'all' ? (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] font-medium">{allLeads.length}</span>
+                  <span className="ml-1.5 rounded-full bg-black/10 px-1.5 text-[10px] font-medium">{allLeads.length}</span>
                 ) : null}
               </TabsTrigger>
             ))}

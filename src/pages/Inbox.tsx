@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, Send, Link2, CheckCheck, User, Search, Mic, MicOff, Video, X, Play, Pause } from 'lucide-react';
+import { Loader2, Send, Link2, CheckCheck, User, Search, Mic, MicOff, Video, X, Play, Pause, Paperclip } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -257,6 +258,11 @@ export default function Inbox() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sendingMedia, setSendingMedia] = useState(false);
+  const [gifOpen, setGifOpen] = useState(false);
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifResults, setGifResults] = useState<{ id: string; url: string; preview: string }[]>([]);
+  const [gifSearching, setGifSearching] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -375,10 +381,11 @@ export default function Inbox() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
-      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      const mr = new MediaRecorder(stream, { mimeType });
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(chunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
         setAudioBlob(blob);
         setAudioUrl(url);
@@ -413,7 +420,8 @@ export default function Inbox() {
     const fd = new FormData();
     fd.append('action', 'send_voice_message');
     fd.append('chat_id', selected.id);
-    fd.append('file', audioBlob, 'voice.webm');
+    const ext = audioBlob.type === 'audio/mp4' ? 'm4a' : 'webm';
+    fd.append('file', audioBlob, `voice.${ext}`);
     const { data: { session: s } } = await supabase.auth.getSession();
     const supabaseUrl = (supabase as any).supabaseUrl as string;
     const res = await fetch(`${supabaseUrl}/functions/v1/unipile-proxy`, {
@@ -449,6 +457,65 @@ export default function Inbox() {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       toast({ variant: 'destructive', title: 'Envoi vidéo échoué', description: (err as any)?.error ?? 'Erreur inconnue' });
+      return;
+    }
+    refetchMessages();
+  };
+
+  const sendAttachment = async (file: File) => {
+    if (!selected) return;
+    setSendingMedia(true);
+    const fd = new FormData();
+    fd.append('action', 'send_attachment');
+    fd.append('chat_id', selected.id);
+    fd.append('file', file, file.name);
+    const { data: { session: s } } = await supabase.auth.getSession();
+    const supabaseUrl = (supabase as any).supabaseUrl as string;
+    const res = await fetch(`${supabaseUrl}/functions/v1/unipile-proxy`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${s?.access_token}` },
+      body: fd,
+    });
+    setSendingMedia(false);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ variant: 'destructive', title: 'Envoi échoué', description: (err as any)?.error ?? 'Erreur inconnue' });
+      return;
+    }
+    refetchMessages();
+  };
+
+  const searchGifs = async (q: string) => {
+    if (!q.trim()) { setGifResults([]); return; }
+    setGifSearching(true);
+    try {
+      const res = await fetch(
+        `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}&key=AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCjY&limit=16&media_filter=gif,tinygif`
+      );
+      const data = await res.json();
+      setGifResults(
+        (data.results ?? []).map((r: any) => ({
+          id: r.id,
+          url: r.media_formats?.gif?.url ?? r.url,
+          preview: r.media_formats?.tinygif?.url ?? r.media_formats?.gif?.url ?? r.url,
+        }))
+      );
+    } catch {
+      toast({ variant: 'destructive', title: 'Recherche GIF échouée' });
+    }
+    setGifSearching(false);
+  };
+
+  const sendGif = async (gifUrl: string) => {
+    if (!selected) return;
+    setGifOpen(false);
+    setSendingMedia(true);
+    const { error } = await supabase.functions.invoke('unipile-proxy', {
+      body: { action: 'send_gif', chat_id: selected.id, gif_url: gifUrl },
+    });
+    setSendingMedia(false);
+    if (error) {
+      toast({ variant: 'destructive', title: 'Envoi GIF échoué', description: error.message });
       return;
     }
     refetchMessages();
@@ -738,10 +805,46 @@ export default function Inbox() {
                       </div>
                     ) : (
                       <div className="flex shrink-0 items-center gap-1">
-                        <Button type="button" size="icon" variant="ghost" className="h-10 w-10" title="Message vocal" onClick={startRecording} disabled={sending}>
+                        {/* Pièce jointe */}
+                        <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendAttachment(f); e.target.value = ''; }} disabled={sendingMedia} />
+                        <Button type="button" size="icon" variant="ghost" className="h-10 w-10" title="Pièce jointe" onClick={() => fileInputRef.current?.click()} disabled={sending || sendingMedia}>
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                        {/* GIF */}
+                        <Popover open={gifOpen} onOpenChange={setGifOpen}>
+                          <PopoverTrigger asChild>
+                            <Button type="button" size="icon" variant="ghost" className="h-10 w-10 text-[11px] font-bold tracking-tight" title="GIF" disabled={sending || sendingMedia}>
+                              GIF
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent side="top" align="end" className="w-72 p-2 space-y-2">
+                            <input
+                              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary"
+                              placeholder="Rechercher un GIF..."
+                              value={gifQuery}
+                              onChange={(e) => { setGifQuery(e.target.value); searchGifs(e.target.value); }}
+                            />
+                            {gifSearching && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>}
+                            {gifResults.length > 0 && (
+                              <div className="grid grid-cols-2 gap-1 max-h-52 overflow-y-auto">
+                                {gifResults.map((g) => (
+                                  <button key={g.id} type="button" className="rounded overflow-hidden hover:opacity-80 transition-opacity" onClick={() => sendGif(g.url)}>
+                                    <img src={g.preview} alt="gif" className="w-full h-20 object-cover" loading="lazy" />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {!gifSearching && gifQuery && gifResults.length === 0 && (
+                              <p className="text-center text-xs text-muted-foreground py-2">Aucun résultat</p>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        {/* Vocal */}
+                        <Button type="button" size="icon" variant="ghost" className="h-10 w-10" title="Message vocal" onClick={startRecording} disabled={sending || sendingMedia}>
                           <Mic className="h-4 w-4" />
                         </Button>
-                        <label title="Message vidéo (LinkedIn uniquement)">
+                        {/* Vidéo */}
+                        <label title="Message vidéo (LinkedIn)">
                           <input type="file" accept="video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendVideoMessage(f); e.target.value = ''; }} disabled={sendingMedia} />
                           <Button type="button" size="icon" variant="ghost" className="h-10 w-10" asChild>
                             <span><Video className="h-4 w-4" /></span>

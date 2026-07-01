@@ -315,8 +315,42 @@ serve(async (req) => {
         if (!incomingForm) return jsonResponse({ error: "Expected multipart/form-data" }, 400);
         const file = incomingForm.get("file") as File | null;
         if (!file) return jsonResponse({ error: "Missing 'file'" }, 400);
+        // Force mp3 extension — Unipile/LinkedIn rejette webm, accepte mp3/m4a
+        const audioBlob = new Blob([await file.arrayBuffer()], { type: "audio/mpeg" });
         const fd = new FormData();
-        fd.append("voice_message", file, file.name || "voice.m4a");
+        fd.append("voice_message", audioBlob, "voice.mp3");
+        return await unipileMultipart(
+          `/api/v1/chats/${encodeURIComponent(chat_id)}/messages`,
+          fd,
+          apiKey,
+        );
+      }
+
+      case "send_attachment": {
+        const { chat_id } = body as { chat_id?: string };
+        if (!chat_id) return jsonResponse({ error: "Missing 'chat_id'" }, 400);
+        if (!incomingForm) return jsonResponse({ error: "Expected multipart/form-data" }, 400);
+        const file = incomingForm.get("file") as File | null;
+        if (!file) return jsonResponse({ error: "Missing 'file'" }, 400);
+        const fd = new FormData();
+        fd.append("attachments", file, file.name);
+        return await unipileMultipart(
+          `/api/v1/chats/${encodeURIComponent(chat_id)}/messages`,
+          fd,
+          apiKey,
+        );
+      }
+
+      case "send_gif": {
+        const { chat_id, gif_url } = body as { chat_id?: string; gif_url?: string };
+        if (!chat_id || !gif_url) return jsonResponse({ error: "Missing 'chat_id' or 'gif_url'" }, 400);
+        // Fetch the GIF server-side to avoid CORS and send as attachment
+        const gifRes = await fetch(gif_url);
+        if (!gifRes.ok) return jsonResponse({ error: "Failed to fetch GIF" }, 502);
+        const gifBuffer = await gifRes.arrayBuffer();
+        const gifBlob = new Blob([gifBuffer], { type: "image/gif" });
+        const fd = new FormData();
+        fd.append("attachments", gifBlob, "animation.gif");
         return await unipileMultipart(
           `/api/v1/chats/${encodeURIComponent(chat_id)}/messages`,
           fd,
