@@ -15,10 +15,11 @@ import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Shield, Users, Loader2, Trash2, Plus, UserPlus, Search,
   Eye, Linkedin, AlertTriangle, TrendingUp, Clock, CheckCircle2,
-  Sparkles, CalendarPlus, X,
+  Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2,
 } from 'lucide-react';
 import type { AppRole } from '@/lib/constants';
 import { format, differenceInDays } from 'date-fns';
@@ -83,7 +84,7 @@ const fmtFull = (d: string | null) => {
 };
 
 export default function AdminPage() {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -104,14 +105,18 @@ export default function AdminPage() {
   const [selectedCoach, setSelectedCoach] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
 
+  // ─── Contenu global state ──────────────────────────────────────────────────
+  const [contentTitle, setContentTitle] = useState('');
+  const [contentBody, setContentBody] = useState('');
+  const [contentType, setContentType] = useState<'script' | 'objection' | 'recommendation' | 'coach_note'>('script');
+  const [contentCategory, setContentCategory] = useState('');
+  const [editingContent, setEditingContent] = useState<string | null>(null);
+  const [personaName, setPersonaName] = useState('');
+  const [personaDesc, setPersonaDesc] = useState('');
+
   const callEdge = async (fn: string, body: object) => {
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erreur');
+    const { data, error } = await supabase.functions.invoke(fn, { body });
+    if (error) throw new Error(error.message || 'Erreur');
     return data;
   };
 
@@ -240,6 +245,94 @@ export default function AdminPage() {
   const coaches = users.filter(u => u.role === 'coach' || u.role === 'admin');
   const students = users.filter(u => u.role === 'user');
 
+  // ─── Contenu global queries + mutations ───────────────────────────────────
+  const { data: globalContents = [], isLoading: contentsLoading } = useQuery({
+    queryKey: ['admin-global-contents'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('coaching_contents')
+        .select('*')
+        .eq('is_global', true)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const { data: allPersonas = [], isLoading: personasLoading } = useQuery({
+    queryKey: ['admin-personas'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('personas').select('*').order('name');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const invalidateContent = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-global-contents'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-personas'] });
+  };
+
+  const upsertContent = useMutation({
+    mutationFn: async () => {
+      if (editingContent) {
+        const { error } = await supabase.from('coaching_contents').update({
+          title: contentTitle, body: contentBody, type: contentType, category: contentCategory || null,
+        }).eq('id', editingContent);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('coaching_contents').insert({
+          title: contentTitle, body: contentBody, type: contentType,
+          category: contentCategory || null, is_global: true, created_by: user?.id,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      invalidateContent();
+      toast({ title: editingContent ? 'Contenu mis à jour' : 'Contenu créé' });
+      setContentTitle(''); setContentBody(''); setContentCategory(''); setEditingContent(null);
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const deleteContent = useMutation({
+    mutationFn: (id: string) => supabase.from('coaching_contents').delete().eq('id', id).then(({ error }) => { if (error) throw error; }),
+    onSuccess: () => { invalidateContent(); toast({ title: 'Contenu supprimé' }); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const createPersona = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('personas').insert({
+        name: personaName, description: personaDesc || null, created_by: user?.id ?? '',
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateContent();
+      toast({ title: 'Persona créé' });
+      setPersonaName(''); setPersonaDesc('');
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const deletePersona = useMutation({
+    mutationFn: (id: string) => supabase.from('personas').delete().eq('id', id).then(({ error }) => { if (error) throw error; }),
+    onSuccess: () => { invalidateContent(); toast({ title: 'Persona supprimé' }); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const CONTENT_TYPE_LABELS: Record<string, string> = {
+    script: 'Script', objection: 'Objection', recommendation: 'Reco', coach_note: 'Note coach',
+  };
+  const CONTENT_TYPE_STYLES: Record<string, string> = {
+    script: 'bg-primary/10 text-primary border-primary/20',
+    objection: 'bg-orange-50 text-orange-700 border-orange-200',
+    recommendation: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    coach_note: 'bg-muted text-muted-foreground border-border',
+  };
+
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 space-y-6" data-testid="page-admin">
@@ -311,6 +404,7 @@ export default function AdminPage() {
                 <span className="rounded-full bg-destructive text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">{failedJobs.length}</span>
               )}
             </TabsTrigger>
+            <TabsTrigger value="content">Contenu global</TabsTrigger>
           </TabsList>
 
           {/* ── Utilisateurs ───────────────────────────────────────── */}
@@ -546,6 +640,154 @@ export default function AdminPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+          {/* ── Contenu global ─────────────────────────────────────── */}
+          <TabsContent value="content" className="mt-4 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Form */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    {editingContent ? 'Modifier le contenu' : 'Ajouter un contenu global'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Titre</Label>
+                    <Input value={contentTitle} onChange={e => setContentTitle(e.target.value)} placeholder="Ex : Script de prise de contact" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Type</Label>
+                      <Select value={contentType} onValueChange={v => setContentType(v as typeof contentType)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(CONTENT_TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Catégorie (optionnel)</Label>
+                      <Input value={contentCategory} onChange={e => setContentCategory(e.target.value)} placeholder="Ex : Closing" className="h-8 text-xs" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Contenu</Label>
+                    <Textarea value={contentBody} onChange={e => setContentBody(e.target.value)} placeholder="Entrez le contenu..." rows={5} className="text-sm resize-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={() => upsertContent.mutate()} disabled={upsertContent.isPending || !contentTitle || !contentBody}>
+                      {upsertContent.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      {editingContent ? 'Enregistrer' : <><Plus className="h-3.5 w-3.5 mr-1.5" /> Créer</>}
+                    </Button>
+                    {editingContent && (
+                      <Button variant="ghost" onClick={() => { setEditingContent(null); setContentTitle(''); setContentBody(''); setContentCategory(''); }}>
+                        Annuler
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Personas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-primary" />
+                    Personas ({allPersonas.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input value={personaName} onChange={e => setPersonaName(e.target.value)} placeholder="Nom du persona" className="text-sm" />
+                    <Input value={personaDesc} onChange={e => setPersonaDesc(e.target.value)} placeholder="Description courte" className="text-sm" />
+                    <Button size="sm" onClick={() => createPersona.mutate()} disabled={!personaName || createPersona.isPending}>
+                      {createPersona.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  {personasLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                      {allPersonas.map((p: any) => (
+                        <div key={p.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium">{p.name}</p>
+                            {p.description && <p className="text-xs text-muted-foreground">{p.description}</p>}
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deletePersona.mutate(p.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                      {allPersonas.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Aucun persona</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Liste contenus */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Contenus globaux ({globalContents.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {contentsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : globalContents.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">Aucun contenu global</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Titre</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Catégorie</TableHead>
+                          <TableHead>Créé le</TableHead>
+                          <TableHead className="w-[80px]" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {globalContents.map((c: any) => (
+                          <TableRow key={c.id}>
+                            <TableCell>
+                              <p className="font-medium text-sm">{c.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-1">{c.body}</p>
+                            </TableCell>
+                            <TableCell>
+                              <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${CONTENT_TYPE_STYLES[c.type] ?? ''}`}>
+                                {CONTENT_TYPE_LABELS[c.type] ?? c.type}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{c.category || '—'}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{fmt(c.created_at)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                                  setEditingContent(c.id);
+                                  setContentTitle(c.title);
+                                  setContentBody(c.body);
+                                  setContentType(c.type);
+                                  setContentCategory(c.category ?? '');
+                                }}>
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteContent.mutate(c.id)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

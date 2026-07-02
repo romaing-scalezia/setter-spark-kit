@@ -20,7 +20,7 @@ import {
 } from '@/hooks/useUnipileConversations';
 import { useUnipileMessages } from '@/hooks/useUnipileMessages';
 import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
-import { useAttendeeName, getCachedAttendeeName } from '@/hooks/useAttendeeNames';
+import { useAttendeeName, getCachedAttendeeName, useAttendeeNamesPrefetch } from '@/hooks/useAttendeeNames';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
@@ -325,6 +325,13 @@ export default function Inbox() {
 
   const chatIds = useMemo(() => sortedConvos.map((c) => c.id), [sortedConvos]);
   const { data: allLinkedLeads = {} } = useAllLinkedLeads(chatIds);
+
+  // Prefetch all attendee names so search works across all conversations, not just visible ones
+  const allAttendeeIds = useMemo(
+    () => sortedConvos.map((c) => getAttendeeProviderId(c)),
+    [sortedConvos],
+  );
+  useAttendeeNamesPrefetch(allAttendeeIds);
 
   const filteredConvos = useMemo(() => {
     let list = sortedConvos;
