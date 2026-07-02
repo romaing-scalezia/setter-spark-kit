@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const UNIPILE_BASE_URL = "https://api15.unipile.com:14546";
+const UNIPILE_BASE_URL = "https://api20.unipile.com:15052";
 const MAX_VISITS_PER_DAY   = 80;
 const MAX_INVITES_PER_DAY  = 20;
 const MAX_MESSAGES_PER_DAY = 50;

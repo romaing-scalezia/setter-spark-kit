@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/AppLayout';
-import { KpiCard } from '@/components/KpiCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,15 +9,30 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Shield, Users, MessageSquare, CalendarCheck, Loader2, Trash2, Plus, UserPlus, Search, Eye, X } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import {
+  Shield, Users, Loader2, Trash2, Plus, UserPlus, Search,
+  Eye, Linkedin, AlertTriangle, TrendingUp, Clock, CheckCircle2,
+  Sparkles, CalendarPlus, X,
+} from 'lucide-react';
 import type { AppRole } from '@/lib/constants';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface Membership {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+  trial_days_left: number | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+}
 
 interface EnrichedUser {
   id: string;
@@ -26,84 +40,88 @@ interface EnrichedUser {
   full_name: string | null;
   avatar_url: string | null;
   role: AppRole;
+  source: string | null;
+  business_type: string | null;
+  onboarding_completed: boolean;
   provider: string;
   providers: string[];
   created_at: string;
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
   debug_role_switch_enabled: boolean;
-  membership: { plan: string; status: string } | null;
+  membership: Membership | null;
+  linkedin_connected: boolean;
+  leads_count: number;
   coach_of: string[];
   coached_by: string[];
 }
 
+interface FailedJob {
+  id: string;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
 const ROLE_OPTIONS: AppRole[] = ['user', 'coach', 'admin'];
 
-const providerLabel = (p: string) => {
-  if (p === 'google') return 'Google';
-  if (p === 'email') return 'Email';
-  return p;
+const planLabel = (plan: string) => ({ free: 'Free', starter: 'Starter', pro: 'Pro', coach: 'Coach' }[plan] ?? plan);
+const planStyle = (plan: string, status: string) => {
+  if (status === 'trialing') return 'bg-primary/10 text-primary border-primary/20';
+  if (plan === 'starter' || plan === 'pro') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  return 'bg-muted text-muted-foreground border-border';
 };
 
-const providerBadgeVariant = (p: string) => {
-  if (p === 'google') return 'default' as const;
-  return 'secondary' as const;
-};
-
-const formatDate = (d: string | null) => {
+const fmt = (d: string | null) => {
   if (!d) return '—';
-  try {
-    return format(new Date(d), 'dd MMM yyyy HH:mm', { locale: fr });
-  } catch {
-    return '—';
-  }
+  try { return format(new Date(d), 'dd MMM yy', { locale: fr }); } catch { return '—'; }
+};
+
+const fmtFull = (d: string | null) => {
+  if (!d) return '—';
+  try { return format(new Date(d), 'dd MMM yyyy HH:mm', { locale: fr }); } catch { return '—'; }
 };
 
 export default function AdminPage() {
+  const { session } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [providerFilter, setProviderFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [planFilter, setPlanFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [linkedinFilter, setLinkedinFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState<EnrichedUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<EnrichedUser | null>(null);
-  const [createUserOpen, setCreateUserOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPassword, setNewUserPassword] = useState('');
-  const [newUserRole, setNewUserRole] = useState<AppRole>('user');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<AppRole>('user');
+  const [extendDays, setExtendDays] = useState('14');
+  const [extendingUser, setExtendingUser] = useState<EnrichedUser | null>(null);
+  const [selectedCoach, setSelectedCoach] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState('');
 
-  // Fetch enriched users from edge function
-  const { data: users = [], isLoading: usersLoading } = useQuery({
+  const callEdge = async (fn: string, body: object) => {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur');
+    return data;
+  };
+
+  // ─── Queries ───────────────────────────────────────────────────────────────
+  const { data: adminData, isLoading } = useQuery({
     queryKey: ['admin-users'],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-list-users`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({}),
-        }
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'Erreur');
-      return body.users as EnrichedUser[];
-    },
+    queryFn: () => callEdge('admin-list-users', {}),
   });
-
-  const { data: leads = [] } = useQuery({
-    queryKey: ['admin-leads'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('leads').select('*');
-      if (error) throw error;
-      return data || [];
-    },
-  });
+  const users: EnrichedUser[] = adminData?.users ?? [];
+  const failedJobs: FailedJob[] = adminData?.system?.failed_jobs ?? [];
 
   const { data: assignments = [] } = useQuery({
     queryKey: ['admin-assignments'],
@@ -114,417 +132,357 @@ export default function AdminPage() {
     },
   });
 
-  // Mutations
-  const updateRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: AppRole }) => {
-      const { error } = await supabase.rpc('set_user_role', { _target_user_id: userId, _role: role });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Rôle mis à jour' });
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
+  // ─── KPIs ──────────────────────────────────────────────────────────────────
+  const PLAN_PRICE = 30; // €/mois
 
-  const toggleDebug = useMutation({
-    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
-      const { error } = await supabase.rpc('set_debug_role_access', { _target_user_id: userId, _enabled: enabled });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Accès debug mis à jour' });
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
+  const kpis = useMemo(() => {
+    const total = users.length;
+    const trialing = users.filter(u => u.membership?.status === 'trialing').length;
+    const paid = users.filter(u => u.membership?.plan !== 'free' && u.membership?.status === 'active').length;
+    const mrr = paid * PLAN_PRICE;
+    const linkedinOk = users.filter(u => u.linkedin_connected).length;
+    const starterpack = users.filter(u => u.source === 'starterpack').length;
+    const newThisWeek = users.filter(u => {
+      try { return differenceInDays(new Date(), new Date(u.created_at)) <= 7; } catch { return false; }
+    }).length;
+    return { total, trialing, paid, mrr, linkedinOk, starterpack, newThisWeek };
+  }, [users]);
 
-  const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ user_id: userId }),
-        }
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'Erreur');
-      return body;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-assignments'] });
-      toast({ title: 'Utilisateur supprimé' });
-      setDeleteUser(null);
-      setSelectedUser(null);
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
-
-  const createUser = useMutation({
-    mutationFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({
-            email: newUserEmail,
-            password: newUserPassword,
-            full_name: newUserName,
-            role: newUserRole,
-          }),
-        }
-      );
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || 'Erreur');
-      return body;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Utilisateur créé avec succès' });
-      setCreateUserOpen(false);
-      setNewUserName('');
-      setNewUserEmail('');
-      setNewUserPassword('');
-      setNewUserRole('user');
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
-
-  const addAssignment = useMutation({
-    mutationFn: async ({ coachId, studentId }: { coachId: string; studentId: string }) => {
-      const { error } = await supabase.from('coach_assignments').insert({ coach_id: coachId, user_id: studentId });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-assignments'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Assignation ajoutée' });
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
-
-  const removeAssignment = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('coach_assignments').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-assignments'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast({ title: 'Assignation supprimée' });
-    },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Erreur', description: error.message });
-    },
-  });
-
-  // Filters
-  const filteredUsers = users.filter((u) => {
-    const q = searchQuery.trim().toLowerCase();
-    const matchesSearch = !q || [
-      u.full_name?.toLowerCase(),
-      u.email?.toLowerCase(),
-    ].some((field) => field?.includes(q));
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-    const matchesProvider = providerFilter === 'all' || u.provider === providerFilter;
-    return matchesSearch && matchesRole && matchesProvider;
-  });
-
-  const coaches = users.filter((u) => u.role === 'coach' || u.role === 'admin');
-  const students = users.filter((u) => u.role === 'user');
-
-  const [selectedCoach, setSelectedCoach] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState('');
+  // ─── Filtered users ────────────────────────────────────────────────────────
+  const filtered = useMemo(() => users.filter(u => {
+    const q = search.toLowerCase();
+    if (q && !u.full_name?.toLowerCase().includes(q) && !u.email?.toLowerCase().includes(q)) return false;
+    if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+    if (planFilter !== 'all') {
+      if (planFilter === 'trialing' && u.membership?.status !== 'trialing') return false;
+      if (planFilter !== 'trialing' && u.membership?.plan !== planFilter) return false;
+    }
+    if (sourceFilter !== 'all' && (sourceFilter === 'starterpack' ? u.source !== 'starterpack' : u.source === 'starterpack')) return false;
+    if (linkedinFilter === 'yes' && !u.linkedin_connected) return false;
+    if (linkedinFilter === 'no' && u.linkedin_connected) return false;
+    return true;
+  }), [users, search, roleFilter, planFilter, sourceFilter, linkedinFilter]);
 
   const getName = (id: string) => {
-    const u = users.find((u) => u.id === id);
+    const u = users.find(u => u.id === id);
     return u?.full_name || u?.email || id.slice(0, 8);
   };
 
-  const handleAddAssignment = () => {
-    if (!selectedCoach || !selectedStudent) return;
-    const exists = assignments.some((a) => a.coach_id === selectedCoach && a.user_id === selectedStudent);
-    if (exists) {
-      toast({ variant: 'destructive', title: 'Déjà assigné' });
-      return;
-    }
-    addAssignment.mutate({ coachId: selectedCoach, studentId: selectedStudent });
-    setSelectedStudent('');
+  // ─── Mutations ─────────────────────────────────────────────────────────────
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-assignments'] });
   };
+
+  const updateRole = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: AppRole }) =>
+      supabase.rpc('set_user_role', { _target_user_id: userId, _role: role }).then(({ error }) => { if (error) throw error; }),
+    onSuccess: () => { invalidate(); toast({ title: 'Rôle mis à jour' }); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const forceStarterpack = useMutation({
+    mutationFn: (userId: string) =>
+      (supabase as any).from('profiles').update({ source: 'starterpack' }).eq('id', userId)
+        .then(({ error }: any) => { if (error) throw error; }),
+    onSuccess: () => { invalidate(); toast({ title: 'Source mise à jour → starterpack' }); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const extendTrial = useMutation({
+    mutationFn: async ({ userId, days }: { userId: string; days: number }) => {
+      const { data: mem, error: fetchErr } = await (supabase as any)
+        .from('memberships').select('current_period_end').eq('user_id', userId).maybeSingle();
+      if (fetchErr) throw fetchErr;
+      const base = mem?.current_period_end ? new Date(mem.current_period_end) : new Date();
+      if (base < new Date()) base.setTime(new Date().getTime());
+      base.setDate(base.getDate() + days);
+      const { error } = await (supabase as any)
+        .from('memberships')
+        .update({ status: 'trialing', current_period_end: base.toISOString() })
+        .eq('user_id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast({ title: `Essai étendu de ${extendDays} jours` }); setExtendingUser(null); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const deleteUserMut = useMutation({
+    mutationFn: (userId: string) => callEdge('admin-delete-user', { user_id: userId }),
+    onSuccess: () => { invalidate(); toast({ title: 'Utilisateur supprimé' }); setDeleteUser(null); setSelectedUser(null); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const createUser = useMutation({
+    mutationFn: () => callEdge('admin-create-user', { email: newEmail, password: newPassword, full_name: newName, role: newRole }),
+    onSuccess: () => {
+      invalidate(); toast({ title: 'Utilisateur créé' });
+      setCreateOpen(false); setNewName(''); setNewEmail(''); setNewPassword(''); setNewRole('user');
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const addAssignment = useMutation({
+    mutationFn: ({ coachId, studentId }: { coachId: string; studentId: string }) =>
+      supabase.from('coach_assignments').insert({ coach_id: coachId, user_id: studentId })
+        .then(({ error }) => { if (error) throw error; }),
+    onSuccess: () => { invalidate(); toast({ title: 'Assignation ajoutée' }); setSelectedStudent(''); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const removeAssignment = useMutation({
+    mutationFn: (id: string) => supabase.from('coach_assignments').delete().eq('id', id)
+      .then(({ error }) => { if (error) throw error; }),
+    onSuccess: () => { invalidate(); toast({ title: 'Assignation supprimée' }); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const coaches = users.filter(u => u.role === 'coach' || u.role === 'admin');
+  const students = users.filter(u => u.role === 'user');
 
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 space-y-6" data-testid="page-admin">
-        <div className="flex items-center gap-3">
-          <div className="rounded-md bg-primary/10 p-2">
-            <Shield className="h-5 w-5 text-primary" />
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-md bg-primary/10 p-2"><Shield className="h-5 w-5 text-primary" /></div>
+            <h1 className="text-2xl font-bold text-foreground">Administration</h1>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Administration</h1>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><UserPlus className="h-4 w-4 mr-1.5" /> Créer un utilisateur</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Créer un utilisateur</DialogTitle>
+                <DialogDescription>Compte manuel avec email et mot de passe.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2"><Label>Nom complet</Label><Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Jean Dupont" /></div>
+                <div className="space-y-2"><Label>Email</Label><Input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="jean@exemple.com" /></div>
+                <div className="space-y-2"><Label>Mot de passe</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••••" /></div>
+                <div className="space-y-2">
+                  <Label>Rôle</Label>
+                  <Select value={newRole} onValueChange={v => setNewRole(v as AppRole)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <Button className="w-full" onClick={() => createUser.mutate()} disabled={createUser.isPending || !newName || !newEmail || !newPassword}>
+                  {createUser.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Créer le compte
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {(() => {
-          const totalStudents = students.length;
-          const totalCoaches = coaches.length;
-          const assignedStudentIds = new Set(assignments.map((a: any) => a.user_id));
-          const assignedStudents = students.filter((s) => assignedStudentIds.has(s.id)).length;
-          const unassignedStudents = totalStudents - assignedStudents;
-          return (
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-              <KpiCard title="Élèves" value={totalStudents} icon={<Users className="h-4 w-4" />} />
-              <KpiCard title="Élèves assignés" value={assignedStudents} icon={<Shield className="h-4 w-4" />} />
-              <KpiCard title="Non assignés" value={unassignedStudents} icon={<MessageSquare className="h-4 w-4" />} />
-              <KpiCard title="Coachs" value={totalCoaches} icon={<CalendarCheck className="h-4 w-4" />} />
-            </div>
-          );
-        })()}
-
-        <Tabs defaultValue="users">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <TabsList>
-              <TabsTrigger value="users">Utilisateurs</TabsTrigger>
-              <TabsTrigger value="assignments">Assignations</TabsTrigger>
-            </TabsList>
-            <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm"><UserPlus className="h-4 w-4 mr-1" /> Créer un utilisateur</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Créer un utilisateur</DialogTitle>
-                  <DialogDescription>Créer un compte manuellement avec email et mot de passe.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="space-y-2">
-                    <Label>Nom complet</Label>
-                    <Input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="Jean Dupont" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="jean@exemple.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Mot de passe</Label>
-                    <Input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="••••••••" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Rôle</Label>
-                    <Select value={newUserRole} onValueChange={(v) => setNewUserRole(v as AppRole)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {ROLE_OPTIONS.map((r) => (
-                          <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => createUser.mutate()}
-                    disabled={createUser.isPending || !newUserName || !newUserEmail || !newUserPassword}
-                  >
-                    {createUser.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Créer le compte
-                  </Button>
+        {/* KPIs */}
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
+          {[
+            { label: 'Utilisateurs', value: kpis.total, icon: Users, color: 'text-foreground' },
+            { label: 'MRR', value: `${kpis.mrr.toLocaleString('fr-FR')} €`, icon: TrendingUp, color: 'text-emerald-600' },
+            { label: 'Payants', value: kpis.paid, icon: CheckCircle2, color: 'text-emerald-600' },
+            { label: 'En essai', value: kpis.trialing, icon: Clock, color: 'text-primary' },
+            { label: 'LinkedIn ✓', value: kpis.linkedinOk, icon: Linkedin, color: 'text-[#0A66C2]' },
+            { label: 'Starterpack', value: kpis.starterpack, icon: Sparkles, color: 'text-primary' },
+            { label: 'Cette semaine', value: `+${kpis.newThisWeek}`, icon: CalendarPlus, color: 'text-muted-foreground' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label}>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <Icon className={`h-3.5 w-3.5 ${color}`} />
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
 
+        {/* Tabs */}
+        <Tabs defaultValue="users">
+          <TabsList>
+            <TabsTrigger value="users">Utilisateurs</TabsTrigger>
+            <TabsTrigger value="assignments">Assignations coaches</TabsTrigger>
+            <TabsTrigger value="health" className="flex items-center gap-1.5">
+              Santé système
+              {failedJobs.length > 0 && (
+                <span className="rounded-full bg-destructive text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">{failedJobs.length}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── Utilisateurs ───────────────────────────────────────── */}
           <TabsContent value="users" className="mt-4 space-y-4">
-            {/* Search and Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Rechercher par nom ou email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+                <Input placeholder="Nom ou email..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
               </div>
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Rôle" />
-                </SelectTrigger>
+                <SelectTrigger className="w-[130px]"><SelectValue placeholder="Rôle" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les rôles</SelectItem>
-                  {ROLE_OPTIONS.map((r) => (
-                    <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
-                  ))}
+                  <SelectItem value="all">Tous rôles</SelectItem>
+                  {ROLE_OPTIONS.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Provider" />
-                </SelectTrigger>
+              <Select value={planFilter} onValueChange={setPlanFilter}>
+                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Plan" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous plans</SelectItem>
+                  <SelectItem value="trialing">En essai</SelectItem>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="starter">Starter</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Source" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes sources</SelectItem>
+                  <SelectItem value="starterpack">Starterpack</SelectItem>
+                  <SelectItem value="organic">Organic</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={linkedinFilter} onValueChange={setLinkedinFilter}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="LinkedIn" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="yes">LinkedIn connecté</SelectItem>
+                  <SelectItem value="no">LinkedIn non connecté</SelectItem>
                 </SelectContent>
               </Select>
+              {(search || roleFilter !== 'all' || planFilter !== 'all' || sourceFilter !== 'all' || linkedinFilter !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setRoleFilter('all'); setPlanFilter('all'); setSourceFilter('all'); setLinkedinFilter('all'); }}>
+                  <X className="h-4 w-4 mr-1" /> Réinitialiser
+                </Button>
+              )}
             </div>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {filteredUsers.length} utilisateur{filteredUsers.length !== 1 ? 's' : ''}
-                  {(searchQuery || roleFilter !== 'all' || providerFilter !== 'all') && (
-                    <span className="text-muted-foreground font-normal"> (filtré)</span>
-                  )}
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {filtered.length} utilisateur{filtered.length !== 1 ? 's' : ''}
+                  {filtered.length !== users.length && ` sur ${users.length}`}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                {usersLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nom</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Rôle</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Inscription</TableHead>
-                        <TableHead>Dernière connexion</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredUsers.map((user) => (
-                        <TableRow key={user.id} className="cursor-pointer hover:bg-muted/50">
-                          <TableCell className="font-medium">{user.full_name || '—'}</TableCell>
-                          <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={user.role}
-                              onValueChange={(value) => updateRole.mutate({ userId: user.id, role: value as AppRole })}
-                            >
-                              <SelectTrigger className="w-[100px] h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ROLE_OPTIONS.map((role) => (
-                                  <SelectItem key={role} value={role} className="capitalize">{role}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={providerBadgeVariant(user.provider)}>
-                              {providerLabel(user.provider)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">{formatDate(user.created_at)}</TableCell>
-                          <TableCell className="text-sm">{formatDate(user.last_sign_in_at)}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" onClick={() => setSelectedUser(user)} title="Détails">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => setDeleteUser(user)} title="Supprimer">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredUsers.length === 0 && (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            Aucun utilisateur trouvé
-                          </TableCell>
+                          <TableHead>Utilisateur</TableHead>
+                          <TableHead>Rôle</TableHead>
+                          <TableHead>Plan</TableHead>
+                          <TableHead>Source</TableHead>
+                          <TableHead>LinkedIn</TableHead>
+                          <TableHead className="text-right">Leads</TableHead>
+                          <TableHead>Inscription</TableHead>
+                          <TableHead>Dernière co.</TableHead>
+                          <TableHead className="w-[80px]" />
                         </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.map(u => (
+                          <TableRow key={u.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-foreground text-sm">{u.full_name || '—'}</p>
+                                <p className="text-xs text-muted-foreground">{u.email}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Select value={u.role} onValueChange={v => updateRole.mutate({ userId: u.id, role: v as AppRole })}>
+                                <SelectTrigger className="w-[90px] h-7 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r} className="capitalize text-xs">{r}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${planStyle(u.membership?.plan ?? 'free', u.membership?.status ?? '')}`}>
+                                  {u.membership?.status === 'trialing' ? `Essai · J-${u.membership.trial_days_left ?? '?'}` : planLabel(u.membership?.plan ?? 'free')}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {u.source === 'starterpack'
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary"><Sparkles className="h-3 w-3" /> Starterpack</span>
+                                : <span className="text-xs text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell>
+                              {u.linkedin_connected
+                                ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                : <X className="h-4 w-4 text-muted-foreground/40" />}
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-medium">{u.leads_count}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{fmt(u.created_at)}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{fmt(u.last_sign_in_at)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedUser(u)}><Eye className="h-3.5 w-3.5" /></Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteUser(u)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filtered.length === 0 && (
+                          <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground text-sm">Aucun utilisateur trouvé</TableCell></TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
+          {/* ── Assignations ───────────────────────────────────────── */}
           <TabsContent value="assignments" className="mt-4 space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Ajouter une assignation</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Ajouter une assignation</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <Select value={selectedCoach} onValueChange={setSelectedCoach}>
-                    <SelectTrigger className="w-full sm:w-[200px]">
-                      <SelectValue placeholder="Sélectionner un coach" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {coaches.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.full_name || c.email}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Sélectionner un coach" /></SelectTrigger>
+                    <SelectContent>{coaches.map(c => <SelectItem key={c.id} value={c.id}>{c.full_name || c.email}</SelectItem>)}</SelectContent>
                   </Select>
                   <Select value={selectedStudent} onValueChange={setSelectedStudent}>
-                    <SelectTrigger className="w-full sm:w-[200px]">
-                      <SelectValue placeholder="Sélectionner un élève" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {students.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.full_name || s.email}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Sélectionner un élève" /></SelectTrigger>
+                    <SelectContent>{students.map(s => <SelectItem key={s.id} value={s.id}>{s.full_name || s.email}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Button onClick={handleAddAssignment} disabled={!selectedCoach || !selectedStudent || addAssignment.isPending}>
+                  <Button onClick={() => {
+                    if (!selectedCoach || !selectedStudent) return;
+                    if (assignments.some((a: any) => a.coach_id === selectedCoach && a.user_id === selectedStudent)) {
+                      toast({ variant: 'destructive', title: 'Déjà assigné' }); return;
+                    }
+                    addAssignment.mutate({ coachId: selectedCoach, studentId: selectedStudent });
+                  }} disabled={!selectedCoach || !selectedStudent || addAssignment.isPending}>
                     <Plus className="h-4 w-4 mr-1" /> Assigner
                   </Button>
                 </div>
               </CardContent>
             </Card>
-
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Assignations actuelles ({assignments.length})</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Assignations ({assignments.length})</CardTitle></CardHeader>
               <CardContent>
                 {assignments.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Aucune assignation</p>
                 ) : (
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Coach</TableHead>
-                        <TableHead>Élève</TableHead>
-                        <TableHead className="w-[80px]">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
+                    <TableHeader><TableRow><TableHead>Coach</TableHead><TableHead>Élève</TableHead><TableHead className="w-[60px]" /></TableRow></TableHeader>
                     <TableBody>
-                      {assignments.map((a) => (
+                      {assignments.map((a: any) => (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">{getName(a.coach_id)}</TableCell>
                           <TableCell>{getName(a.user_id)}</TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => removeAssignment.mutate(a.id)} disabled={removeAssignment.isPending}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeAssignment.mutate(a.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -535,136 +493,203 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ── Santé système ──────────────────────────────────────── */}
+          <TabsContent value="health" className="mt-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card className={failedJobs.length > 0 ? 'border-destructive/40' : 'border-emerald-200'}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className={`h-4 w-4 ${failedJobs.length > 0 ? 'text-destructive' : 'text-emerald-500'}`} />
+                    Jobs campagne en erreur
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {failedJobs.length === 0 ? (
+                    <p className="text-sm text-emerald-600 font-medium">Aucune erreur 🎉</p>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {failedJobs.map(j => (
+                        <div key={j.id} className="rounded-md border border-destructive/20 bg-destructive/5 p-2.5">
+                          <p className="text-xs font-medium text-destructive">{j.error_message || 'Erreur inconnue'}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">{fmtFull(j.created_at)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Linkedin className="h-4 w-4 text-[#0A66C2]" />
+                    LinkedIn non connecté
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const notConnected = users.filter(u => !u.linkedin_connected && u.role === 'user');
+                    return notConnected.length === 0 ? (
+                      <p className="text-sm text-emerald-600 font-medium">Tous connectés 🎉</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                        {notConnected.map(u => (
+                          <div key={u.id} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground">{u.full_name || u.email}</span>
+                            <span className="text-xs text-muted-foreground">{fmt(u.last_sign_in_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
-      {/* User Detail Sheet */}
-      <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="sm:max-w-lg overflow-y-auto">
+      {/* ── Fiche utilisateur ────────────────────────────────────────────── */}
+      <Sheet open={!!selectedUser} onOpenChange={open => !open && setSelectedUser(null)}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
           {selectedUser && (
             <>
               <SheetHeader>
                 <SheetTitle>{selectedUser.full_name || selectedUser.email}</SheetTitle>
                 <SheetDescription>{selectedUser.email}</SheetDescription>
               </SheetHeader>
-              <div className="mt-6 space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Rôle</p>
-                    <Badge className="mt-1 capitalize">{selectedUser.role}</Badge>
+              <div className="mt-6 space-y-5">
+                {/* Infos clés */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Rôle', value: selectedUser.role },
+                    { label: 'Source', value: selectedUser.source || 'organic' },
+                    { label: 'Plan', value: selectedUser.membership ? `${planLabel(selectedUser.membership.plan)} · ${selectedUser.membership.status}` : '—' },
+                    { label: 'Essai restant', value: selectedUser.membership?.trial_days_left != null ? `${selectedUser.membership.trial_days_left} jours` : '—' },
+                    { label: 'Leads', value: String(selectedUser.leads_count) },
+                    { label: 'LinkedIn', value: selectedUser.linkedin_connected ? 'Connecté' : 'Non connecté' },
+                    { label: 'Onboarding', value: selectedUser.onboarding_completed ? 'Complété' : 'En cours' },
+                    { label: 'Inscription', value: fmt(selectedUser.created_at) },
+                    { label: 'Dernière co.', value: fmt(selectedUser.last_sign_in_at) },
+                    { label: 'Email confirmé', value: selectedUser.email_confirmed_at ? 'Oui' : 'Non' },
+                  ].map(({ label, value }) => (
+                    <div key={label}>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-sm font-medium mt-0.5">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+
+                {/* Actions */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</p>
+
+                  {/* Étendre essai */}
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={extendDays}
+                      onChange={e => setExtendDays(e.target.value)}
+                      className="w-20 h-8 text-sm"
+                      min="1"
+                    />
+                    <Button size="sm" variant="outline" className="flex-1" onClick={() => extendTrial.mutate({ userId: selectedUser.id, days: parseInt(extendDays) })} disabled={extendTrial.isPending}>
+                      {extendTrial.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      <CalendarPlus className="h-3.5 w-3.5 mr-1.5" /> Étendre l'essai (jours)
+                    </Button>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Provider</p>
-                    <Badge variant={providerBadgeVariant(selectedUser.provider)} className="mt-1">
-                      {providerLabel(selectedUser.provider)}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Inscription</p>
-                    <p className="text-sm font-medium mt-1">{formatDate(selectedUser.created_at)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Dernière connexion</p>
-                    <p className="text-sm font-medium mt-1">{formatDate(selectedUser.last_sign_in_at)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email confirmé</p>
-                    <p className="text-sm font-medium mt-1">{selectedUser.email_confirmed_at ? 'Oui' : 'Non'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Debug mode</p>
-                    <p className="text-sm font-medium mt-1">{selectedUser.debug_role_switch_enabled ? 'Activé' : 'Désactivé'}</p>
+
+                  {/* Forcer starterpack */}
+                  {selectedUser.source !== 'starterpack' && (
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => forceStarterpack.mutate(selectedUser.id)} disabled={forceStarterpack.isPending}>
+                      {forceStarterpack.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Passer en Starterpack
+                    </Button>
+                  )}
+
+                  {/* Changer rôle */}
+                  <div className="flex gap-2 items-center">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Changer rôle</span>
+                    <Select value={selectedUser.role} onValueChange={v => updateRole.mutate({ userId: selectedUser.id, role: v as AppRole })}>
+                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>{ROLE_OPTIONS.map(r => <SelectItem key={r} value={r} className="capitalize text-xs">{r}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                {selectedUser.membership && (
+                <Separator />
+
+                {/* Stripe */}
+                {selectedUser.membership?.stripe_customer_id && (
                   <div>
-                    <p className="text-sm text-muted-foreground mb-1">Abonnement</p>
-                    <div className="flex gap-2">
-                      <Badge variant="outline" className="capitalize">{selectedUser.membership.plan}</Badge>
-                      <Badge variant="outline" className="capitalize">{selectedUser.membership.status}</Badge>
-                    </div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Stripe</p>
+                    <a
+                      href={`https://dashboard.stripe.com/customers/${selectedUser.membership.stripe_customer_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Voir dans Stripe Dashboard →
+                    </a>
                   </div>
                 )}
 
-                {selectedUser.providers.length > 1 && (
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Providers liés</p>
-                    <div className="flex gap-2">
-                      {selectedUser.providers.map((p) => (
-                        <Badge key={p} variant="outline">{providerLabel(p)}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <Separator />
 
-                {(selectedUser.coach_of.length > 0 || selectedUser.coached_by.length > 0) && (
-                  <div>
-                    {selectedUser.coach_of.length > 0 && (
-                      <>
-                        <p className="text-sm text-muted-foreground mb-1">Coach de</p>
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {selectedUser.coach_of.map((id) => (
-                            <Badge key={id} variant="outline">{getName(id)}</Badge>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {selectedUser.coached_by.length > 0 && (
-                      <>
-                        <p className="text-sm text-muted-foreground mb-1">Coaché par</p>
-                        <div className="flex flex-wrap gap-1">
-                          {selectedUser.coached_by.map((id) => (
-                            <Badge key={id} variant="outline">{getName(id)}</Badge>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <div className="pt-4 border-t">
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => {
-                      setSelectedUser(null);
-                      setDeleteUser(selectedUser);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" /> Supprimer cet utilisateur
-                  </Button>
-                </div>
+                <Button variant="destructive" className="w-full" onClick={() => { setSelectedUser(null); setDeleteUser(selectedUser); }}>
+                  <Trash2 className="h-4 w-4 mr-2" /> Supprimer cet utilisateur
+                </Button>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+      {/* ── Confirmation suppression ─────────────────────────────────────── */}
+      <AlertDialog open={!!deleteUser} onOpenChange={open => !open && setDeleteUser(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer l'utilisateur ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Vous êtes sur le point de supprimer définitivement <strong>{deleteUser?.full_name || deleteUser?.email}</strong>.
-              <br /><br />
-              Cette action est <strong>irréversible</strong>. Toutes les données associées (leads, deals, événements, assignations) seront supprimées.
+              Suppression définitive de <strong>{deleteUser?.full_name || deleteUser?.email}</strong>. Toutes ses données seront perdues.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteUser && deleteUserMutation.mutate(deleteUser.id)}
-              disabled={deleteUserMutation.isPending}
+              onClick={() => deleteUser && deleteUserMut.mutate(deleteUser.id)}
+              disabled={deleteUserMut.isPending}
             >
-              {deleteUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {deleteUserMut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Supprimer définitivement
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Dialog étendre essai (depuis table) ─────────────────────────── */}
+      <Dialog open={!!extendingUser} onOpenChange={open => !open && setExtendingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Étendre l'essai</DialogTitle>
+            <DialogDescription>{extendingUser?.full_name || extendingUser?.email}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Nombre de jours à ajouter</Label>
+              <Input type="number" value={extendDays} onChange={e => setExtendDays(e.target.value)} min="1" />
+            </div>
+            <Button className="w-full" onClick={() => extendingUser && extendTrial.mutate({ userId: extendingUser.id, days: parseInt(extendDays) })} disabled={extendTrial.isPending}>
+              {extendTrial.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

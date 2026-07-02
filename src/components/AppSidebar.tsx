@@ -21,6 +21,7 @@ const DUO: Record<string, string> = {
   trophy: `<rect class="fill" x="3.5" y="13.5" width="5" height="6.5" rx="1.2"/><rect class="fill" x="9.5" y="9.5" width="5" height="10.5" rx="1.2"/><rect class="fill" x="15.5" y="15.5" width="5" height="4.5" rx="1.2"/><rect class="ln" x="3.5" y="13.5" width="5" height="6.5" rx="1.2"/><rect class="ln" x="9.5" y="9.5" width="5" height="10.5" rx="1.2"/><rect class="ln" x="15.5" y="15.5" width="5" height="4.5" rx="1.2"/><path fill="currentColor" d="M12 3l.85 1.75 1.9.27-1.38 1.32.33 1.9L12 7.6l-1.7.91.33-1.9L9.25 5.3l1.9-.55z"/>`,
   settings: `<circle class="fill" cx="12" cy="12" r="3.2"/><circle class="ln" cx="12" cy="12" r="3.2"/><path class="ln" d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>`,
   megaphone: `<circle class="fill" cx="18" cy="12" r="2.6"/><circle class="ln" cx="5.5" cy="6.5" r="2.2"/><circle class="ln" cx="5.5" cy="17.5" r="2.2"/><circle class="ln" cx="18" cy="12" r="2.6"/><path class="ln" d="M7.6 7.2 15.4 11M7.6 16.8 15.4 13"/>`,
+  supervision: `<rect class="fill" x="3" y="6" width="18" height="12" rx="3"/><rect class="ln" x="3" y="6" width="18" height="12" rx="3"/><path class="ln" d="M2.6 12C4.6 8.5 8 6.5 12 6.5S19.4 8.5 21.4 12C19.4 15.5 16 17.5 12 17.5S4.6 15.5 2.6 12Z"/><circle class="ln" cx="12" cy="12" r="2.8"/>`,
 };
 
 function DuoIcon({ name, className = '' }: { name: string; className?: string }) {
@@ -58,6 +59,7 @@ const navMain: NavDef[] = [
   { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'admin'] },
   { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'admin'] },
   { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'admin'] },
+  { title: 'Supervision', url: '/coach',      icon: 'supervision', roles: ['coach'] },
 ];
 
 const navResources: NavDef[] = [

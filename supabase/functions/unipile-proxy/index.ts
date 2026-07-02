@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const UNIPILE_BASE_URL = "https://api15.unipile.com:14546";
+const UNIPILE_BASE_URL = "https://api20.unipile.com:15052";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
