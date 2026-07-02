@@ -82,13 +82,20 @@ export function BillingContent() {
                   : 'Aucun abonnement actif'}
               </p>
             </div>
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[statusKey] ?? STATUS_STYLES.incomplete}`}>
-              {STATUS_LABELS[statusKey] ?? statusKey}
-            </span>
+            {!isTrialing && (
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[statusKey] ?? STATUS_STYLES.incomplete}`}>
+                {STATUS_LABELS[statusKey] ?? statusKey}
+              </span>
+            )}
           </div>
 
           <div className="flex gap-2 flex-wrap pt-1">
-            {isActive ? (
+            {isTrialing ? (
+              <Button size="sm" onClick={() => navigate('/pricing')} className="gap-2 bg-primary hover:bg-primary/90">
+                <Zap className="h-4 w-4" />
+                Passer Premium
+              </Button>
+            ) : isActive ? (
               <Button variant="outline" size="sm" onClick={handlePortal} disabled={portalLoading}>
                 {portalLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ExternalLink className="h-4 w-4 mr-2" />}
                 Gérer mon abonnement
@@ -96,7 +103,7 @@ export function BillingContent() {
             ) : (
               <Button size="sm" onClick={() => navigate('/pricing')} className="gap-2">
                 <Zap className="h-4 w-4" />
-                {isTrialing ? 'Passer à l\'abonnement' : 'S\'abonner'}
+                S'abonner
               </Button>
             )}
           </div>

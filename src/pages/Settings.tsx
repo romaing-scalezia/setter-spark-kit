@@ -85,10 +85,10 @@ export default function SettingsPage() {
           onValueChange={(v) => setSearchParams({ tab: v }, { replace: true })}
         >
           <TabsList>
-            <TabsTrigger value="profil">Profil</TabsTrigger>
-            <TabsTrigger value="linkedin">Intégration LinkedIn</TabsTrigger>
-            <TabsTrigger value="workspace">Espace de travail</TabsTrigger>
-            <TabsTrigger value="facturation">Facturation</TabsTrigger>
+            <TabsTrigger value="profil" className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none">Profil</TabsTrigger>
+            <TabsTrigger value="linkedin" className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none">Intégration LinkedIn</TabsTrigger>
+            <TabsTrigger value="workspace" className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none">Espace de travail</TabsTrigger>
+            <TabsTrigger value="facturation" className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none">Facturation</TabsTrigger>
           </TabsList>
 
           {/* Profil */}

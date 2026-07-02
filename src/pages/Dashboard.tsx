@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  MessageSquare, PhoneCall, CalendarCheck,
+  MessageSquare, Reply, PhoneCall, CalendarCheck,
   DollarSign, Plus, Info, ArrowRight, Target,
 } from 'lucide-react';
 import { isWithinInterval, startOfWeek, endOfWeek, format } from 'date-fns';
@@ -275,7 +275,7 @@ export default function Dashboard() {
         {/* KPIs */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
           <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} className="border-primary/30" />
-          <KpiCard title="Réponses" value={respondedCount} icon={<PhoneCall className="h-4 w-4" />} className="border-primary/30" />
+          <KpiCard title="Réponses" value={respondedCount} icon={<Reply className="h-4 w-4" />} className="border-primary/30" />
           <KpiCard title="Appels proposés" value={callProposedCount} icon={<PhoneCall className="h-4 w-4" />} className="border-primary/30" />
           <KpiCard title="RDV bookés" value={rdvBookedCount} icon={<CalendarCheck className="h-4 w-4" />} className="border-primary/30" />
         </div>
@@ -316,12 +316,12 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 rounded-lg bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{totalRevenue.toLocaleString('fr-FR')}€</p>
+                <div className="text-center p-3 rounded-lg bg-primary/10">
+                  <p className="text-2xl font-bold text-primary">{totalRevenue.toLocaleString('fr-FR')}€</p>
                   <p className="text-xs text-muted-foreground">CA total</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-muted/50">
-                  <p className="text-2xl font-bold text-foreground">{filteredDeals.filter((d: any) => d.status === 'won').length}</p>
+                <div className="text-center p-3 rounded-lg bg-primary/10">
+                  <p className="text-2xl font-bold text-primary">{filteredDeals.filter((d: any) => d.status === 'won').length}</p>
                   <p className="text-xs text-muted-foreground">Clients</p>
                 </div>
               </div>

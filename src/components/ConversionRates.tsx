@@ -26,7 +26,7 @@ export function ConversionRates({ conversations, responses, callsProposed, meeti
         <div key={r.label} className="rounded-lg border bg-card p-3 text-center">
           <p className="text-2xl font-bold text-primary">{r.value}</p>
           <p className="text-xs font-medium text-foreground mt-1">{r.label}</p>
-          <p className="text-[10px] text-muted-foreground">{r.sub}</p>
+          <p className="text-xs text-muted-foreground">{r.sub}</p>
         </div>
       ))}
     </div>

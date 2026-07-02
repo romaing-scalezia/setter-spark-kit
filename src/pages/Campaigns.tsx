@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,11 +20,26 @@ import { fr } from 'date-fns/locale';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import type { CampaignStatus } from '@/hooks/useCampaigns';
 import { CAMPAIGN_STATUS_LABELS, CAMPAIGN_STATUS_STYLES } from '@/lib/constants';
+import { useUnipileAccount } from '@/hooks/useUnipileAccount';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Campaigns() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
+  const { account, loading: accountLoading } = useUnipileAccount();
   const { campaigns, isLoading, toggleStatus, deleteCampaign } = useCampaigns();
+
+  useEffect(() => {
+    if (!accountLoading && !account) {
+      toast({
+        title: 'LinkedIn non connecté',
+        description: 'Connectez votre compte LinkedIn pour accéder aux campagnes.',
+        className: 'bg-primary border-primary text-white [&>div>*:first-child]:text-base [&>div>*:first-child]:font-bold [&>div>*:first-child]:text-white',
+      });
+      navigate('/settings?tab=linkedin', { replace: true });
+    }
+  }, [accountLoading, account, navigate, toast]);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [personaFilter, setPersonaFilter] = useState<string>('all');

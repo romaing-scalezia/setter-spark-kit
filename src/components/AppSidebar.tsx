@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePlan } from '@/hooks/usePlan';
 import {
   Sidebar,
   SidebarContent,
@@ -117,7 +118,11 @@ function NavItem({ item, collapsed }: { item: NavDef; collapsed: boolean }) {
 
 function NavGroup({ label, items, collapsed }: { label: string; items: NavDef[]; collapsed: boolean }) {
   const { activeRole } = useAuth();
-  const visible = items.filter((i) => i.roles.includes(activeRole) || activeRole === 'admin');
+  const { hasStarterAccess } = usePlan();
+  const visible = items.filter((i) => {
+    if (i.url === '/leaderboard' && !hasStarterAccess) return false;
+    return i.roles.includes(activeRole) || activeRole === 'admin';
+  });
   if (!visible.length) return null;
 
   return (
@@ -153,10 +158,7 @@ function FreePlanCard({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className="rounded-[12px] p-[12px]" style={{ background: '#EDECFD', border: '1px solid #D9D7FB' }}>
-      <p className="text-[11.5px] font-bold" style={{ color: '#4A43DA' }}>Plan Free</p>
-      <p className="mt-[3px] mb-[9px] text-[10.5px] leading-snug" style={{ color: '#6E69B5' }}>
-        3 leads/mois · 1 compte LinkedIn
-      </p>
+      <p className="mb-[9px] text-[11.5px] font-bold" style={{ color: '#4A43DA' }}>Essai gratuit</p>
       <button
         type="button"
         onClick={() => navigate('/settings?tab=facturation')}
@@ -251,8 +253,8 @@ export function AppSidebar() {
         </SidebarHeader>
 
         <SidebarContent className="flex flex-col gap-[14px]" style={{ padding: '14px 12px 0', overflow: 'visible' }}>
-          <NavGroup label="Navigation"          items={navMain}      collapsed={collapsed} />
-          <NavGroup label="Ressources & équipe" items={navResources} collapsed={collapsed} />
+          <NavGroup label="" items={navMain}      collapsed={collapsed} />
+          <NavGroup label="" items={navResources} collapsed={collapsed} />
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-[11px]" style={{ padding: '10px 12px 16px' }}>

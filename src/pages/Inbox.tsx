@@ -281,8 +281,9 @@ export default function Inbox() {
       toast({
         title: 'LinkedIn non connecté',
         description: 'Connectez votre compte LinkedIn pour accéder à l\'Inbox.',
+        className: 'bg-primary border-primary text-white [&>div>*:first-child]:text-base [&>div>*:first-child]:font-bold [&>div>*:first-child]:text-white',
       });
-      navigate('/settings', { replace: true });
+      navigate('/settings?tab=linkedin', { replace: true });
     }
   }, [accountLoading, account, navigate, toast]);
 
