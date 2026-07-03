@@ -151,14 +151,19 @@ serve(async (req) => {
       return jsonResponse({ received: true, action: "replied" }, 200);
     }
 
-    // ── Déconnexion compte ──
-    const { error } = await admin
-      .from("unipile_accounts")
-      .update({ status: "disconnected", updated_at: new Date().toISOString() })
-      .eq("account_id", account_id ?? "");
+    // ── Déconnexion compte — seulement sur events explicites ──
+    if (eventType === "DISCONNECTED" || eventType === "ACCOUNT_DISCONNECTED" || eventType === "ERROR") {
+      const { error } = await admin
+        .from("unipile_accounts")
+        .update({ status: "disconnected", updated_at: new Date().toISOString() })
+        .eq("account_id", account_id ?? "");
+      if (error) console.error("[unipile-webhook] update error:", error);
+      return jsonResponse({ received: true, action: "disconnected" }, 200);
+    }
 
-    if (error) console.error("[unipile-webhook] update error:", error);
-    return jsonResponse({ received: true, action: "disconnected" }, 200);
+    // Event inconnu → on ignore sans toucher au statut
+    console.log("[unipile-webhook] unhandled event, ignored:", eventType);
+    return jsonResponse({ received: true, action: "ignored", event: eventType }, 200);
 
   } catch (err) {
     console.error("[unipile-webhook] unexpected error:", err);
