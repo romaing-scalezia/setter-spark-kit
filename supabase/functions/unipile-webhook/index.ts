@@ -45,12 +45,12 @@ serve(async (req) => {
       return jsonResponse({ received: true, error: "invalid payload" }, 200);
     }
 
-    const { status, event, account_id, name } = payload as {
-      status?: string;
-      event?: string;
-      account_id?: string;
-      name?: string;
-    };
+    // Support both flat payload and nested AccountStatus format
+    const accountStatus = (payload as any)?.AccountStatus;
+    const account_id: string | undefined = accountStatus?.account_id ?? (payload as any)?.account_id;
+    const name: string | undefined = (payload as any)?.name;
+    const status: string | undefined = accountStatus?.message ?? (payload as any)?.status;
+    const event: string | undefined = (payload as any)?.event;
 
     const eventType = status ?? event ?? "";
 
@@ -59,18 +59,40 @@ serve(async (req) => {
     }
 
     // ── Connexion compte ──
-    if (eventType === "CREATION_SUCCESS" || eventType === "RECONNECTED") {
-      if (!name) {
-        return jsonResponse({ received: true, error: "missing name (user_id)" }, 200);
+    if (
+      eventType === "CREATION_SUCCESS" ||
+      eventType === "RECONNECTED" ||
+      eventType === "SYNC_SUCCESS" ||
+      eventType === "CONNECTED"
+    ) {
+      if (name) {
+        // Flat format with user UUID in name field
+        const { error } = await admin
+          .from("unipile_accounts")
+          .upsert(
+            { user_id: name, account_id, status: "connected", updated_at: new Date().toISOString() },
+            { onConflict: "user_id" },
+          );
+        if (error) console.error("[unipile-webhook] upsert error:", error);
+        return jsonResponse({ received: true, action: "connected" }, 200);
+      } else {
+        // Nested format (AccountStatus) — find user by existing account_id or skip
+        const { data: existing } = await admin
+          .from("unipile_accounts")
+          .select("user_id")
+          .eq("account_id", account_id)
+          .maybeSingle();
+        if (existing?.user_id) {
+          await admin
+            .from("unipile_accounts")
+            .update({ status: "connected", updated_at: new Date().toISOString() })
+            .eq("account_id", account_id);
+          return jsonResponse({ received: true, action: "reconnected" }, 200);
+        }
+        // No user found for this account_id — can't link without name
+        console.warn("[unipile-webhook] SYNC_SUCCESS without name, account_id:", account_id);
+        return jsonResponse({ received: true, action: "skipped_no_name" }, 200);
       }
-      const { error } = await admin
-        .from("unipile_accounts")
-        .upsert(
-          { user_id: name, account_id, status: "connected", updated_at: new Date().toISOString() },
-          { onConflict: "user_id" },
-        );
-      if (error) console.error("[unipile-webhook] upsert error:", error);
-      return jsonResponse({ received: true, action: "connected" }, 200);
     }
 
     // ── Acceptation d'invitation LinkedIn ──

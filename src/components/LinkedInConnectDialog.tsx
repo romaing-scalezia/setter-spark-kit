@@ -90,9 +90,17 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
         const { data } = await supabase.functions.invoke('unipile-proxy', {
           body: { action: 'get_account_status', account_id: accId },
         });
-        const status = (data as any)?.connection_status ?? (data as any)?.status;
-        if (status === 'OK' || status === 'connected') {
+        // Unipile returns { AccountStatus: { message: "OK" } } or { connection_status: "OK" }
+        const msg =
+          (data as any)?.AccountStatus?.message ??
+          (data as any)?.connection_status ??
+          (data as any)?.status;
+        if (msg === 'OK' || msg === 'connected' || msg === 'CONNECTED') {
           stopPolling(); stopTimer();
+          // Upsert unipile_accounts — IN_APP_VALIDATION bypasses create_account upsert
+          await supabase.functions.invoke('unipile-proxy', {
+            body: { action: 'confirm_account', account_id: accId },
+          });
           onSuccess(); onOpenChange(false);
           toast({ title: 'LinkedIn connecté !' });
         }

@@ -373,6 +373,22 @@ serve(async (req) => {
         );
       }
 
+      case "confirm_account": {
+        // Called after IN_APP_VALIDATION polling detects OK — upserts unipile_accounts
+        const { account_id: confirmId } = body as { account_id?: string };
+        if (!confirmId) return jsonResponse({ error: "Missing 'account_id'" }, 400);
+        const serviceRoleKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+          ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
+        const admin2 = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey2 as string, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await admin2.from("unipile_accounts").upsert(
+          { user_id: userId, account_id: confirmId, status: "connected", updated_at: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+        return jsonResponse({ ok: true });
+      }
+
       case "list_accounts": {
         return await unipileJson("/api/v1/accounts?limit=50", { method: "GET" }, apiKey);
       }
