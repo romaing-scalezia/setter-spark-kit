@@ -274,7 +274,7 @@ export default function CampaignNew() {
         user_id:       user.id,
         name:          name.trim(),
         scenario_type: scenarioType,
-        persona_id:    personaId || null,
+        persona_id:    (personaId && personaId !== 'none') ? personaId : null,
         status,
       })
       .select('id')
@@ -462,7 +462,7 @@ export default function CampaignNew() {
                     <SelectValue placeholder="Choisir un persona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucun</SelectItem>
+                    <SelectItem value="none">Aucun</SelectItem>
                     {personas.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
