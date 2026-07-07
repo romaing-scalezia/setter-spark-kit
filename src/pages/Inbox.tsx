@@ -675,10 +675,7 @@ export default function Inbox() {
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   ) : linkedLead ? (
                     <>
-                      <Button size="sm" onClick={() => navigate('/leads')}>
-                        Booker un RDV
-                      </Button>
-                      <StatusDropdown value={linkedLead.status} onValueChange={handleStatusChange} />
+<StatusDropdown value={linkedLead.status} onValueChange={handleStatusChange} />
                       <Button size="sm" variant="outline" className="px-2" onClick={() => setDrawerOpen(true)}>
                         <User className="h-4 w-4" />
                       </Button>

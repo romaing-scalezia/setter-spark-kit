@@ -23,10 +23,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing env vars" }), { status: 500, headers: corsHeaders });
     }
 
-    // Prix custom (ex: starterpack) passé depuis le frontend, sinon prix par défaut
-    const body = await req.json().catch(() => ({}));
-    const priceId: string = body?.price_id ?? defaultPriceId;
-
     // Vérifie le JWT Supabase
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
@@ -37,6 +33,12 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
+
+    // Vérifie côté serveur si l'utilisateur est starterpack — ne pas faire confiance au frontend
+    const starterpackPriceId = Deno.env.get("STRIPE_PRICE_STARTERPACK_ID");
+    const { data: profile } = await supabase.from("profiles").select("source").eq("id", user.id).maybeSingle();
+    const isStarterpack = (profile as any)?.source === "starterpack" && !!starterpackPriceId;
+    const priceId: string = isStarterpack ? starterpackPriceId! : defaultPriceId;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" });
 

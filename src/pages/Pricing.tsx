@@ -29,8 +29,6 @@ function LogoMark() {
 
 const PRICE_NORMAL = 30;
 const PRICE_STARTERPACK = 15;
-// Remplace par le price_id Stripe 15€ une fois créé dans Stripe Dashboard
-const STRIPE_PRICE_STARTERPACK = 'price_1TqZa8KgILpYSo2u4wymkPem';
 
 export default function Pricing() {
   const navigate = useNavigate();
@@ -46,11 +44,7 @@ export default function Pricing() {
     if (!session) { navigate('/login'); return; }
     setLoading(true);
     try {
-      const body = isStarterpack ? { price_id: STRIPE_PRICE_STARTERPACK } : {};
-      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
-        body,
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      const { data, error } = await supabase.functions.invoke('stripe-checkout');
       if (error || !data?.url) throw new Error(error?.message ?? 'Erreur');
       window.location.href = data.url;
     } catch (err) {
@@ -112,12 +106,14 @@ export default function Pricing() {
                 <p className="text-xs text-muted-foreground mt-1">Sans engagement · Résiliable à tout moment</p>
               </div>
 
-              <div className="space-y-3 flex-1">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-white text-primary text-xs font-medium px-3 py-1">
-                  🎉 14 jours d'essai gratuit
-                </span>
-                <p className="text-xs text-muted-foreground">Sans carte bancaire requise pour l'essai</p>
-              </div>
+              {!isStarterpack && (
+                <div className="space-y-3 flex-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-white text-primary text-xs font-medium px-3 py-1">
+                    🎉 14 jours d'essai gratuit
+                  </span>
+                  <p className="text-xs text-muted-foreground">Sans carte bancaire requise pour l'essai</p>
+                </div>
+              )}
 
               <button
                 onClick={handleSubscribe}
