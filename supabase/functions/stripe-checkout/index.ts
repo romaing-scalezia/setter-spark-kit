@@ -16,12 +16,16 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
       ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
-    const priceId = Deno.env.get("STRIPE_PRICE_ID");
+    const defaultPriceId = Deno.env.get("STRIPE_PRICE_ID");
     const appUrl = Deno.env.get("APP_URL") ?? "http://localhost:8080";
 
-    if (!stripeKey || !supabaseUrl || !serviceRoleKey || !priceId) {
+    if (!stripeKey || !supabaseUrl || !serviceRoleKey || !defaultPriceId) {
       return new Response(JSON.stringify({ error: "Missing env vars" }), { status: 500, headers: corsHeaders });
     }
+
+    // Prix custom (ex: starterpack) passé depuis le frontend, sinon prix par défaut
+    const body = await req.json().catch(() => ({}));
+    const priceId: string = body?.price_id ?? defaultPriceId;
 
     // Vérifie le JWT Supabase
     const authHeader = req.headers.get("Authorization") ?? "";

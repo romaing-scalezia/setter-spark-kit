@@ -41,7 +41,8 @@ serve(async (req) => {
       const fullName = u.user_metadata?.full_name || u.user_metadata?.name || "";
       await supabaseAdmin.from("profiles").upsert({ id: u.id, email: u.email, full_name: fullName, role: "user" }, { onConflict: "id" });
       await supabaseAdmin.from("user_roles").upsert({ user_id: u.id, role: "user" }, { onConflict: "user_id" });
-      await supabaseAdmin.from("memberships").upsert({ user_id: u.id, plan: "free", status: "active" }, { onConflict: "user_id" });
+      const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      await supabaseAdmin.from("memberships").upsert({ user_id: u.id, plan: "free", status: "trialing", current_period_end: trialEnd }, { onConflict: "user_id" });
     }
 
     // Fetch all enrichment data in parallel

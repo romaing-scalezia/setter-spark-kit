@@ -27,18 +27,28 @@ function LogoMark() {
   );
 }
 
+const PRICE_NORMAL = 30;
+const PRICE_STARTERPACK = 15;
+// Remplace par le price_id Stripe 15€ une fois créé dans Stripe Dashboard
+const STRIPE_PRICE_STARTERPACK = 'price_1TqZa8KgILpYSo2u4wymkPem';
+
 export default function Pricing() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { session } = useAuth();
-  const { isTrialing, trialDaysLeft, trialExpired } = usePlan();
+  const { isTrialing, trialDaysLeft, trialExpired, hasStarterAccess } = usePlan();
   const [loading, setLoading] = useState(false);
+
+  const isStarterpack = hasStarterAccess;
+  const displayPrice = isStarterpack ? PRICE_STARTERPACK : PRICE_NORMAL;
 
   const handleSubscribe = async () => {
     if (!session) { navigate('/login'); return; }
     setLoading(true);
     try {
+      const body = isStarterpack ? { price_id: STRIPE_PRICE_STARTERPACK } : {};
       const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body,
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error || !data?.url) throw new Error(error?.message ?? 'Erreur');
@@ -82,10 +92,23 @@ export default function Pricing() {
               </div>
 
               <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold text-foreground">30€</span>
-                  <span className="text-muted-foreground text-sm">/mois</span>
-                </div>
+                {isStarterpack ? (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-5xl font-bold text-foreground">{displayPrice}€</span>
+                      <span className="text-muted-foreground text-sm">/mois</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground line-through">{PRICE_NORMAL}€</span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5">-50% Starterpack</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-5xl font-bold text-foreground">{displayPrice}€</span>
+                    <span className="text-muted-foreground text-sm">/mois</span>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground mt-1">Sans engagement · Résiliable à tout moment</p>
               </div>
 

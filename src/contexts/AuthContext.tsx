@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
         supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source').eq('id', userId).single(),
-        (supabase as any).from('memberships').select('plan, status, trial_ends_at').eq('user_id', userId).maybeSingle(),
+        (supabase as any).from('memberships').select('plan, status, current_period_end').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (rolesRes.data?.role) {
@@ -84,15 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
         const { data: created } = await (supabase as any)
           .from('memberships')
-          .insert({ user_id: userId, plan: 'free', status: 'trialing', trial_ends_at: trialEnd })
-          .select('plan, status, trial_ends_at')
+          .insert({ user_id: userId, plan: 'free', status: 'trialing', current_period_end: trialEnd })
+          .select('plan, status, current_period_end')
           .single();
         membership = created;
       }
 
       setPlan((membership?.plan as MembershipPlan) ?? 'free');
       setMembershipStatus((membership?.status as MembershipStatus) ?? 'trialing');
-      setTrialEndsAt(membership?.trial_ends_at ?? null);
+      setTrialEndsAt(membership?.current_period_end ?? null);
     } catch (err) {
       console.error('fetchUserData error:', err);
       setRoles(['user']);
