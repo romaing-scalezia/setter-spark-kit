@@ -221,6 +221,33 @@ function UserRow({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function OnboardingResetButton() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleReset = async () => {
+    if (!user) return;
+    await supabase.from('profiles').update({ onboarding_completed: false }).eq('id', user.id);
+    navigate('/onboarding');
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleReset}
+      title="Tester l'onboarding"
+      className="shrink-0 rounded-md p-1.5 transition-colors hover:bg-black/5"
+      style={{ color: '#9A9EA8' }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15 }}>
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <path d="M12 17h.01"/>
+      </svg>
+    </button>
+  );
+}
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
@@ -261,7 +288,12 @@ export function AppSidebar() {
 
         <SidebarFooter className="flex flex-col gap-[11px]" style={{ padding: '10px 12px 16px' }}>
           <FreePlanCard collapsed={collapsed} />
-          <NavGroup label="" items={navSettings} collapsed={collapsed} />
+          <div className="flex items-center gap-1">
+            <div className="flex-1">
+              <NavGroup label="" items={navSettings} collapsed={collapsed} />
+            </div>
+            <OnboardingResetButton />
+          </div>
           <UserRow collapsed={collapsed} />
         </SidebarFooter>
       </Sidebar>

@@ -293,6 +293,7 @@ export default function Inbox() {
     loadingMore,
     hasMore,
     loadMore,
+    loadAll,
   } = useUnipileConversations(account?.account_id ?? null);
   // Auto-select conversation from ?chat= param (e.g. from Dashboard CTA)
   useEffect(() => {
@@ -332,6 +333,18 @@ export default function Inbox() {
     [sortedConvos],
   );
   useAttendeeNamesPrefetch(allAttendeeIds);
+
+  // Quand l'utilisateur tape, charger toutes les pages restantes
+  const loadAllCalledRef = useRef(false);
+  useEffect(() => {
+    if (search.trim() && hasMore && !loadAllCalledRef.current) {
+      loadAllCalledRef.current = true;
+      loadAll();
+    }
+    if (!search.trim()) {
+      loadAllCalledRef.current = false;
+    }
+  }, [search, hasMore, loadAll]);
 
   const filteredConvos = useMemo(() => {
     let list = sortedConvos;
@@ -580,6 +593,12 @@ export default function Inbox() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {search.trim() && loadingMore && (
+                <div className="absolute right-2.5 top-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Chargement…</span>
+                </div>
+              )}
             </div>
             <div className="flex gap-1.5 flex-wrap">
               {(['all', 'unread', 'appel_propose', 'followup'] as const).map((f) => (

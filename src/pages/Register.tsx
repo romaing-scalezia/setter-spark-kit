@@ -10,7 +10,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, MailCheck } from 'lucide-react';
 
 export default function Register() {
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,10 +22,6 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) {
-      toast({ variant: 'destructive', title: 'Erreur', description: 'Le nom complet est requis.' });
-      return;
-    }
     if (password.length < 6) {
       toast({ variant: 'destructive', title: 'Erreur', description: 'Le mot de passe doit contenir au moins 6 caractères.' });
       return;
@@ -37,7 +32,7 @@ export default function Register() {
         email,
         password,
         options: {
-          data: { full_name: fullName, source },
+          data: { source },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
@@ -168,10 +163,6 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleRegister} className="space-y-4" data-testid="register-form">
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Nom complet</Label>
-              <Input id="fullName" placeholder="Jean Dupont" value={fullName} onChange={(e) => setFullName(e.target.value)} required data-testid="register-fullname" />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="vous@exemple.com" value={email} onChange={(e) => setEmail(e.target.value)} required data-testid="register-email" />

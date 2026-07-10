@@ -113,12 +113,50 @@ export function useUnipileConversations(account_id: string | null | undefined) {
     }
   }, [account_id, cursor, loadingMore]);
 
+  const cursorRef = useRef(cursor);
+  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
+  const loadingMoreRef = useRef(loadingMore);
+  useEffect(() => { loadingMoreRef.current = loadingMore; }, [loadingMore]);
+
+  const loadAll = useCallback(async () => {
+    if (!account_id) return;
+    let currentCursor = cursorRef.current;
+    while (currentCursor) {
+      if (loadingMoreRef.current) {
+        await new Promise((r) => setTimeout(r, 200));
+        continue;
+      }
+      setLoadingMore(true);
+      loadingMoreRef.current = true;
+      try {
+        const { items, cursor: nextCursor } = await fetchPage(account_id, currentCursor);
+        setConversations((prev) => {
+          const seen = new Set(prev.map((c) => c.id));
+          const merged = [...prev];
+          for (const it of items) {
+            if (!seen.has(it.id)) merged.push(it);
+          }
+          return sortByRecent(merged);
+        });
+        currentCursor = nextCursor;
+        cursorRef.current = nextCursor;
+        setCursor(nextCursor);
+      } catch {
+        break;
+      } finally {
+        setLoadingMore(false);
+        loadingMoreRef.current = false;
+      }
+    }
+  }, [account_id]);
+
   return {
     conversations,
     loading,
     loadingMore,
     hasMore: cursor !== null,
     loadMore,
+    loadAll,
     refetch: initialLoad,
   };
 }
