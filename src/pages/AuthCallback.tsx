@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const processedRef = useRef(false);
 
   useEffect(() => {
@@ -52,6 +53,17 @@ export default function AuthCallback() {
         await supabase.rpc('bootstrap_current_user', { _full_name: fullName ?? null });
       } catch (err) {
         console.error('Bootstrap error (non-fatal):', err);
+      }
+
+      // Persist source from URL (Google OAuth doesn't carry metadata directly)
+      const source = searchParams.get('source');
+      if (source) {
+        await supabase.auth.updateUser({ data: { source } });
+      }
+
+      // Activate 14-day trial for starterpack users (handles both email + Google OAuth)
+      if (source === 'starterpack') {
+        await supabase.rpc('activate_starterpack_trial');
       }
 
       // Fetch role to determine redirect target

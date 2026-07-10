@@ -61,8 +61,8 @@ export default function Register() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
+          redirectTo: `${window.location.origin}/auth/callback?source=${source}`,
+        },
       });
       if (result.error) {
         toast({ variant: 'destructive', title: 'Erreur Google', description: String(result.error) });
