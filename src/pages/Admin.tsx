@@ -197,14 +197,16 @@ export default function AdminPage() {
   const extendTrial = useMutation({
     mutationFn: async ({ userId, days }: { userId: string; days: number }) => {
       const { data: mem, error: fetchErr } = await (supabase as any)
-        .from('memberships').select('current_period_end').eq('user_id', userId).maybeSingle();
+        .from('memberships').select('current_period_start, current_period_end').eq('user_id', userId).maybeSingle();
       if (fetchErr) throw fetchErr;
       const base = mem?.current_period_end ? new Date(mem.current_period_end) : new Date();
       if (base < new Date()) base.setTime(new Date().getTime());
       base.setDate(base.getDate() + days);
+      const updatePayload: Record<string, string> = { status: 'trialing', current_period_end: base.toISOString() };
+      if (!mem?.current_period_start) updatePayload.current_period_start = new Date().toISOString();
       const { error } = await (supabase as any)
         .from('memberships')
-        .update({ status: 'trialing', current_period_end: base.toISOString() })
+        .update(updatePayload)
         .eq('user_id', userId);
       if (error) throw error;
     },

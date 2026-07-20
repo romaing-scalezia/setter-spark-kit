@@ -81,10 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Nouvel utilisateur : crée le membership avec trial 14j
       if (!membership) {
-        const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+        const now = new Date();
+        const periodStart = now.toISOString();
+        const periodEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
         const { data: created } = await (supabase as any)
           .from('memberships')
-          .insert({ user_id: userId, plan: 'free', status: 'trialing', current_period_end: trialEnd })
+          .insert({ user_id: userId, plan: 'free', status: 'active', current_period_start: periodStart, current_period_end: periodEnd })
           .select('plan, status, current_period_end')
           .single();
         membership = created;
