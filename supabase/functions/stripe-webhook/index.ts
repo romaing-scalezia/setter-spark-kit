@@ -52,7 +52,8 @@ serve(async (req) => {
           status: "active",
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId,
-          trial_ends_at: null,
+          current_period_start: null,
+          current_period_end: null,
         }).eq("user_id", userId);
         break;
       }

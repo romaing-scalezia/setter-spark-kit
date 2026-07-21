@@ -33,6 +33,11 @@ interface Membership {
   trial_days_left: number | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  is_paid: boolean;
+  mrr_cents: number;
+  currency: string | null;
+  interval: string | null;
+  cancel_at_period_end: boolean;
 }
 
 interface EnrichedUser {
@@ -138,13 +143,13 @@ export default function AdminPage() {
   });
 
   // ─── KPIs ──────────────────────────────────────────────────────────────────
-  const PLAN_PRICE = 30; // €/mois
-
   const kpis = useMemo(() => {
     const total = users.length;
     const trialing = users.filter(u => u.membership?.status === 'trialing').length;
-    const paid = users.filter(u => u.membership?.plan !== 'free' && u.membership?.status === 'active').length;
-    const mrr = paid * PLAN_PRICE;
+    const paid = users.filter(u => u.membership?.is_paid).length;
+    // mrr_cents comes straight from the live Stripe subscription amount (Admin edge function),
+    // annual plans already normalized to a monthly-equivalent amount.
+    const mrr = Math.round(users.reduce((sum, u) => sum + (u.membership?.mrr_cents ?? 0), 0)) / 100;
     const linkedinOk = users.filter(u => u.linkedin_connected).length;
     const starterpack = users.filter(u => u.source === 'starterpack').length;
     const newThisWeek = users.filter(u => {

@@ -1,10 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@14";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Stripe's own canonical statuses, mapped down to the subset the app displays.
+// past_due/unpaid still count as "paying" until Stripe actually cancels the subscription.
+function mapStripeStatus(status: Stripe.Subscription.Status): string {
+  switch (status) {
+    case "trialing": return "trialing";
+    case "active": return "active";
+    case "past_due":
+    case "unpaid": return "past_due";
+    case "canceled": return "canceled";
+    default: return "incomplete"; // incomplete, incomplete_expired, paused
+  }
+}
+
+const PAYING_STATUSES = new Set(["active", "past_due"]);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -75,6 +91,54 @@ serve(async (req) => {
       leadsCountMap.set(l.owner_id, (leadsCountMap.get(l.owner_id) || 0) + 1);
     }
 
+    // Live Stripe lookup: local `memberships` rows only mirror webhook events, which can
+    // drift (missed events, hardcoded plan on checkout, etc). Pulling the subscription
+    // directly from Stripe for every user with a stripe_subscription_id gives the real
+    // status, price and interval so MRR/paid counts match the Stripe dashboard.
+    type StripeLive = {
+      status: string;
+      amountCents: number | null;
+      currency: string | null;
+      interval: string | null;
+      cancelAtPeriodEnd: boolean;
+      currentPeriodEnd: string | null;
+    };
+    const stripeLiveMap = new Map<string, StripeLive>();
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    const subscriptionIds = [...new Set(
+      (memberships || []).map((m: any) => m.stripe_subscription_id).filter(Boolean)
+    )] as string[];
+
+    if (stripeKey && subscriptionIds.length > 0) {
+      const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" });
+      const results = await Promise.allSettled(
+        subscriptionIds.map((id) => stripe.subscriptions.retrieve(id, { expand: ["items.data.price"] }))
+      );
+      results.forEach((r, i) => {
+        if (r.status !== "fulfilled") {
+          console.error("[admin-list-users] stripe fetch failed for", subscriptionIds[i], r.reason);
+          return;
+        }
+        const sub = r.value;
+        const price = sub.items.data[0]?.price;
+        const unitAmount = price?.unit_amount ?? null;
+        const interval = price?.recurring?.interval ?? null;
+        const monthlyAmount = unitAmount == null ? null
+          : interval === "year" ? Math.round(unitAmount / 12)
+          : unitAmount;
+        stripeLiveMap.set(sub.id, {
+          status: mapStripeStatus(sub.status),
+          amountCents: monthlyAmount,
+          currency: price?.currency ?? null,
+          interval,
+          cancelAtPeriodEnd: sub.cancel_at_period_end,
+          currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+        });
+      });
+    } else if (!stripeKey) {
+      console.warn("[admin-list-users] STRIPE_SECRET_KEY not set — falling back to local membership status for MRR/paid counts");
+    }
+
     const now = new Date();
     const enrichedUsers = users.map((u: any) => {
       const profile = profileMap.get(u.id) || {};
@@ -86,11 +150,26 @@ serve(async (req) => {
       const coachOf = (assignments || []).filter((a: any) => a.coach_id === u.id).map((a: any) => a.user_id);
       const coachedBy = (assignments || []).filter((a: any) => a.user_id === u.id).map((a: any) => a.coach_id);
 
+      const subId = membership?.stripe_subscription_id as string | undefined;
+      const live = subId ? stripeLiveMap.get(subId) : undefined;
+      const effectiveStatus = live?.status ?? membership?.status ?? null;
+      const effectiveCurrentPeriodEnd = live?.currentPeriodEnd ?? membership?.current_period_end ?? null;
+
       let trialDaysLeft: number | null = null;
-      if (membership?.status === "trialing" && membership?.current_period_end) {
-        const end = new Date(membership.current_period_end);
+      if (effectiveStatus === "trialing" && effectiveCurrentPeriodEnd) {
+        const end = new Date(effectiveCurrentPeriodEnd);
         trialDaysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
       }
+
+      // "Paid" and MRR reflect the real Stripe subscription whenever we could fetch one.
+      // No subscription id at all means no real Stripe subscription exists, so it can't be paying.
+      // If a subscription id exists but the live lookup failed/unavailable, fall back to the local mirror.
+      const isPaid = live
+        ? PAYING_STATUSES.has(live.status)
+        : subId
+          ? (membership?.plan !== "free" && membership?.status === "active")
+          : false;
+      const mrrCents = isPaid ? (live?.amountCents ?? 0) : 0;
 
       return {
         id: u.id,
@@ -109,11 +188,16 @@ serve(async (req) => {
         debug_role_switch_enabled: profile.debug_role_switch_enabled || false,
         membership: membership ? {
           plan: membership.plan,
-          status: membership.status,
-          current_period_end: membership.current_period_end,
+          status: effectiveStatus,
+          current_period_end: effectiveCurrentPeriodEnd,
           trial_days_left: trialDaysLeft,
           stripe_customer_id: membership.stripe_customer_id,
           stripe_subscription_id: membership.stripe_subscription_id,
+          is_paid: isPaid,
+          mrr_cents: mrrCents,
+          currency: live?.currency ?? null,
+          interval: live?.interval ?? null,
+          cancel_at_period_end: live?.cancelAtPeriodEnd ?? false,
         } : null,
         linkedin_connected: !!unipile && unipile.status === "connected",
         leads_count: leadsCountMap.get(u.id) || 0,
