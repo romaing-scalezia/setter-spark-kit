@@ -96,16 +96,25 @@ serve(async (req) => {
     }
 
     // ── Acceptation d'invitation LinkedIn ──
-    if (eventType === "INVITATION_ACCEPTED" || eventType === "CONNECTION_ACCEPTED") {
+    if (
+      eventType === "INVITATION_ACCEPTED" ||
+      eventType === "CONNECTION_ACCEPTED" ||
+      eventType === "new_relation"
+    ) {
       const attendeeProviderId = (payload as any)?.provider_id
-        ?? (payload as any)?.attendee?.provider_id;
+        ?? (payload as any)?.attendee?.provider_id
+        ?? (payload as any)?.user_provider_id;
       if (attendeeProviderId) {
         const now = new Date().toISOString();
-        await admin
+        const { error, count } = await admin
           .from("campaign_leads")
-          .update({ accepted_at: now, status: "accepted" })
+          .update({ accepted_at: now, status: "accepted" }, { count: "exact" })
           .eq("provider_id", attendeeProviderId)
           .is("accepted_at", null);
+        if (error) console.error("[unipile-webhook] accepted update error:", error);
+        else console.log("[unipile-webhook] accepted update matched rows:", count);
+      } else {
+        console.warn("[unipile-webhook] acceptance event without provider id:", eventType);
       }
       return jsonResponse({ received: true, action: "accepted" }, 200);
     }
