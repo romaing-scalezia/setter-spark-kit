@@ -210,6 +210,7 @@ export type Database = {
           conversation_started_at: string | null
           created_at: string
           custom_tags: string[] | null
+          date_rdv: string | null
           disqualification_reason:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
@@ -247,6 +248,7 @@ export type Database = {
           conversation_started_at?: string | null
           created_at?: string
           custom_tags?: string[] | null
+          date_rdv?: string | null
           disqualification_reason?:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
@@ -284,6 +286,7 @@ export type Database = {
           conversation_started_at?: string | null
           created_at?: string
           custom_tags?: string[] | null
+          date_rdv?: string | null
           disqualification_reason?:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
@@ -785,6 +788,7 @@ export type Database = {
         | "rendez_vous_booke"
         | "ferme_perdu"
         | "non_qualifie"
+        | "ferme_gagne"
       loss_reason_type:
         | "pas_interesse"
         | "pas_le_bon_timing"
@@ -954,6 +958,7 @@ export const Constants = {
         "rendez_vous_booke",
         "ferme_perdu",
         "non_qualifie",
+        "ferme_gagne",
       ],
       loss_reason_type: [
         "pas_interesse",

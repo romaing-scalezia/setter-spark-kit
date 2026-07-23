@@ -152,7 +152,7 @@ export default function Dashboard() {
   const filteredLeadIds = useMemo(() => new Set(filteredLeads.map((l) => l.id)), [filteredLeads]);
   const filteredDeals = useMemo(() => deals.filter((d: any) => filteredLeadIds.has(d.lead_id)), [deals, filteredLeadIds]);
   const totalRevenue = filteredDeals.filter((d: any) => d.status === 'won').reduce((s: number, d: any) => s + Number(d.amount), 0);
-  const rdvLeads = filteredLeads.filter((l) => l.status === 'rendez_vous_booke' && !deals.find((d: any) => d.lead_id === l.id));
+  const wonLeads = filteredLeads.filter((l) => l.status === 'ferme_gagne' && !deals.find((d: any) => d.lead_id === l.id));
 
   const weekLabel = useMemo(() => {
     const now = new Date();
@@ -308,7 +308,7 @@ export default function Dashboard() {
                 <DollarSign className="h-4 w-4 text-primary" />
                 Chiffre d'affaires
               </CardTitle>
-              {rdvLeads.length > 0 && (
+              {wonLeads.length > 0 && (
                 <Button size="sm" variant="outline" onClick={() => setDealOpen(true)}>
                   <Plus className="h-4 w-4 mr-1" /> Deal
                 </Button>
@@ -367,14 +367,14 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Lead (RDV booké)</Label>
+              <Label>Lead (Fermé gagné)</Label>
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={dealLeadId}
                 onChange={(e) => setDealLeadId(e.target.value)}
               >
                 <option value="">Sélectionner un lead</option>
-                {rdvLeads.map((l) => (
+                {wonLeads.map((l) => (
                   <option key={l.id} value={l.id}>{l.first_name} {l.last_name}{l.company_name ? ` — ${l.company_name}` : ''}</option>
                 ))}
               </select>

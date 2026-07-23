@@ -10,6 +10,8 @@ import { StatusDropdown } from '@/components/StatusDropdown';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { ReasonModal } from '@/components/ReasonModal';
 import { FollowUpDateModal } from '@/components/FollowUpDateModal';
+import { RdvDateModal } from '@/components/RdvDateModal';
+import { CloseWonModal } from '@/components/CloseWonModal';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
 import { MergeLeadsModal } from '@/components/MergeLeadsModal';
 import { Button } from '@/components/ui/button';
@@ -37,6 +39,7 @@ const STATUS_TABS: Array<{ value: string; label: string }> = [
   { value: 'appel_propose', label: 'Appels' },
   { value: 'follow_up', label: 'Follow-up' },
   { value: 'rendez_vous_booke', label: 'RDV' },
+  { value: 'ferme_gagne', label: 'Gagnés' },
   { value: 'ferme_perdu', label: 'Perdus' },
   { value: 'non_qualifie', label: 'Non qual.' },
 ];
@@ -108,6 +111,8 @@ export default function Leads() {
   const [reasonModalOpen, setReasonModalOpen] = useState(false);
   const [reasonType, setReasonType] = useState<'loss' | 'disqualification'>('loss');
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [rdvModalOpen, setRdvModalOpen] = useState(false);
+  const [closeWonModalOpen, setCloseWonModalOpen] = useState(false);
 
   const { data: allLeads = [], isLoading } = useQuery({
     queryKey: ['leads'],
@@ -199,7 +204,7 @@ export default function Leads() {
 
       const STATUS_RANK: Record<string, number> = {
         conversation_engagee: 0, en_cours: 1, appel_propose: 2,
-        follow_up: 3, rendez_vous_booke: 4, ferme_perdu: -1, non_qualifie: -1,
+        follow_up: 3, rendez_vous_booke: 4, ferme_gagne: 5, ferme_perdu: -1, non_qualifie: -1,
       };
       const newRank = STATUS_RANK[newStatus] ?? 0;
 
@@ -209,7 +214,9 @@ export default function Leads() {
       if (newStatus === 'ferme_perdu') updateData.closed_lost_at = new Date().toISOString();
       if (newStatus === 'non_qualifie') updateData.unqualified_at = new Date().toISOString();
 
-      if (newRank < 4) updateData.meeting_booked_at = null;
+      // rank 4 (rendez_vous_booke) and 5 (ferme_gagne, which follows it) both keep the
+      // meeting/RDV date; anything lower in the funnel clears it.
+      if (newRank < 4) { updateData.meeting_booked_at = null; updateData.date_rdv = null; }
       if (newRank < 2) updateData.call_proposed_at = null;
       if (newStatus === 'appel_propose') updateData.call_proposed_at = new Date().toISOString();
       if (newStatus === 'rendez_vous_booke') updateData.meeting_booked_at = new Date().toISOString();
@@ -239,6 +246,36 @@ export default function Leads() {
     },
     onError: (error: any) => {
       toast({ variant: 'destructive', title: 'Erreur', description: error?.message || 'Impossible de changer le statut' });
+    },
+  });
+
+  const closeWon = useMutation({
+    mutationFn: async ({ lead, amount }: { lead: Lead; amount: number }) => {
+      const { error: dealError } = await supabase.from('deals').insert({
+        lead_id: lead.id,
+        owner_id: lead.owner_id,
+        amount,
+        status: 'won',
+      });
+      if (dealError) throw dealError;
+
+      const updateData: Record<string, any> = { status: 'ferme_gagne', last_status_change_at: new Date().toISOString() };
+      const { error: leadError } = await supabase.from('leads').update(updateData).eq('id', lead.id);
+      if (leadError) throw leadError;
+
+      await supabase.from('lead_events').insert({
+        lead_id: lead.id, user_id: user!.id, event_type: 'status_changed',
+        old_value: lead.status, new_value: 'ferme_gagne',
+        metadata: { amount },
+      });
+    },
+    onSuccess: () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ['lead-events'] });
+      toast({ title: 'Deal gagné 🎉' });
+    },
+    onError: (error: any) => {
+      toast({ variant: 'destructive', title: 'Erreur', description: error?.message || 'Impossible d\'enregistrer le deal' });
     },
   });
 
@@ -319,6 +356,8 @@ export default function Leads() {
     if (newStatus === 'follow_up') { setPendingStatusChange({ lead, newStatus }); setFollowUpModalOpen(true); }
     else if (newStatus === 'ferme_perdu') { setPendingStatusChange({ lead, newStatus }); setReasonType('loss'); setReasonModalOpen(true); }
     else if (newStatus === 'non_qualifie') { setPendingStatusChange({ lead, newStatus }); setReasonType('disqualification'); setReasonModalOpen(true); }
+    else if (newStatus === 'rendez_vous_booke') { setPendingStatusChange({ lead, newStatus }); setRdvModalOpen(true); }
+    else if (newStatus === 'ferme_gagne') { setPendingStatusChange({ lead, newStatus }); setCloseWonModalOpen(true); }
     else updateStatus.mutate({ leadId: lead.id, newStatus });
   }, [updateStatus, allLeads]);
 
@@ -335,6 +374,17 @@ export default function Leads() {
       updateStatus.mutate({ leadId: pendingStatusChange.lead.id, newStatus: pendingStatusChange.newStatus, extra });
     }
     setPendingStatusChange(null);
+  };
+
+  const handleRdvDate = (date: Date) => {
+    if (pendingStatusChange) updateStatus.mutate({ leadId: pendingStatusChange.lead.id, newStatus: 'rendez_vous_booke', extra: { date_rdv: format(date, 'yyyy-MM-dd') } });
+    setPendingStatusChange(null);
+  };
+
+  const handleCloseWon = (amount: number) => {
+    if (pendingStatusChange) closeWon.mutate({ lead: pendingStatusChange.lead, amount });
+    setPendingStatusChange(null);
+    setCloseWonModalOpen(false);
   };
 
   const getPersona = (lead: Lead) => {
@@ -470,6 +520,7 @@ export default function Leads() {
     'appel_propose',
     'follow_up',
     'rendez_vous_booke',
+    'ferme_gagne',
     'ferme_perdu',
   ];
 
@@ -830,6 +881,14 @@ export default function Leads() {
       <CreateLeadModal open={createOpen} onOpenChange={setCreateOpen} onSubmit={async (data) => { await createLead.mutateAsync(data); }} />
       <ReasonModal open={reasonModalOpen} onOpenChange={(o) => { setReasonModalOpen(o); if (!o) setPendingStatusChange(null); }} type={reasonType} onSubmit={handleReason} />
       <FollowUpDateModal open={followUpModalOpen} onOpenChange={(o) => { setFollowUpModalOpen(o); if (!o) setPendingStatusChange(null); }} onSubmit={handleFollowUpDate} />
+      <RdvDateModal open={rdvModalOpen} onOpenChange={(o) => { setRdvModalOpen(o); if (!o) setPendingStatusChange(null); }} onSubmit={handleRdvDate} />
+      <CloseWonModal
+        open={closeWonModalOpen}
+        onOpenChange={(o) => { setCloseWonModalOpen(o); if (!o) setPendingStatusChange(null); }}
+        lead={pendingStatusChange?.newStatus === 'ferme_gagne' ? pendingStatusChange.lead : null}
+        onSubmit={handleCloseWon}
+        isPending={closeWon.isPending}
+      />
       <LeadDetailDrawer lead={selectedLead} open={drawerOpen} onOpenChange={setDrawerOpen} events={leadEvents} onDelete={handleSingleDelete} />
 
       {/* Delete confirmation */}

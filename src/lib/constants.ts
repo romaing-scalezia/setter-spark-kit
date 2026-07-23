@@ -27,8 +27,9 @@ export const STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; b
   appel_propose: { label: 'Appel proposé', color: 'text-primary', bg: 'bg-primary/10' },
   follow_up: { label: 'Follow-up', color: 'text-warning', bg: 'bg-warning/10' },
   rendez_vous_booke: { label: 'RDV booké', color: 'text-success', bg: 'bg-success/10' },
+  ferme_gagne: { label: 'Fermé gagné', color: 'text-won', bg: 'bg-won/10' },
   ferme_perdu: { label: 'Fermé perdu', color: 'text-destructive', bg: 'bg-destructive/10' },
-  non_qualifie: { label: 'Non qualifié', color: 'text-muted-foreground', bg: 'bg-muted' },
+  non_qualifie: { label: 'Non qualifié', color: 'text-destructive', bg: 'bg-destructive/10' },
 };
 
 export const LOSS_REASONS: Record<LossReason, string> = {

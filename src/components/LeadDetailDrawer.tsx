@@ -300,6 +300,13 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
             </div>
           )}
 
+          {lead.date_rdv && (
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span>RDV : {format(new Date(lead.date_rdv), 'dd MMMM yyyy', { locale: fr })}</span>
+            </div>
+          )}
+
           {lead.loss_reason && (
             <div className="space-y-1">
               <p className="text-sm font-medium text-destructive">Raison de perte</p>

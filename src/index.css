@@ -46,6 +46,8 @@
     --success-foreground: 0 0% 100%;
     --warning: 37 89% 44%;            /* #D6890C tiède */
     --warning-foreground: 0 0% 100%;
+    --won: 172 66% 33%;               /* teal — Fermé gagné, distinct du vert RDV */
+    --won-foreground: 0 0% 100%;
 
     /* lignes & focus */
     --border: 240 11% 93%;            /* #EAEAEE */
@@ -87,6 +89,8 @@
     --success-foreground: 0 0% 100%;
     --warning: 37 75% 48%;
     --warning-foreground: 0 0% 100%;
+    --won: 172 55% 38%;
+    --won-foreground: 0 0% 100%;
     --border: 240 10% 19%;
     --input: 240 10% 19%;
     --ring: 243 80% 67%;
