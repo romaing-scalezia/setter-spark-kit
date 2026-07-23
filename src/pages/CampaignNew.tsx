@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ArrowLeft, ArrowRight, Upload, Check, Loader2, Info } from 'lucide-react';
 
 /* ─── Types ─── */
@@ -58,25 +59,56 @@ function splitCsvLine(line: string): string[] {
     .map((v) => v.trim().replace(/^"|"$/g, ''));
 }
 
-function parseCSV(text: string): CsvLead[] {
+function parseCsvRaw(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.split('\n').filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const headers = splitCsvLine(lines[0]).map((h) =>
-    h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-  );
-  return lines
-    .slice(1)
-    .map((line) => {
-      const values = splitCsvLine(line);
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
-      return {
-        linkedin_url:  obj.linkedin_url || obj.url || obj.linkedin || '',
-        first_name:    obj.first_name   || obj.firstname || obj.prenom || '',
-        last_name:     obj.last_name    || obj.lastname  || obj.nom    || '',
-        company_name:  obj.company_name || obj.company   || obj.entreprise || '',
-      };
-    })
+  if (lines.length < 2) return { headers: [], rows: [] };
+  return {
+    headers: splitCsvLine(lines[0]),
+    rows: lines.slice(1).map(splitCsvLine),
+  };
+}
+
+/* ─── Column mapping (user-driven, no locked header names) ─── */
+type TargetField = 'linkedin_url' | 'first_name' | 'last_name' | 'company_name';
+
+const TARGET_FIELDS: Array<{ key: TargetField; label: string; required: boolean }> = [
+  { key: 'linkedin_url', label: 'URL LinkedIn', required: true },
+  { key: 'first_name',   label: 'Prénom',       required: false },
+  { key: 'last_name',    label: 'Nom',          required: false },
+  { key: 'company_name', label: 'Entreprise',   required: false },
+];
+
+const FIELD_ALIASES: Record<TargetField, string[]> = {
+  linkedin_url: ['linkedin_url', 'url', 'linkedin'],
+  first_name:   ['first_name', 'firstname', 'prenom'],
+  last_name:    ['last_name', 'lastname', 'nom'],
+  company_name: ['company_name', 'company', 'entreprise'],
+};
+
+type ColumnMapping = Record<TargetField, number>; // column index, -1 = not mapped
+
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+/* Pre-fill the mapping modal with a best-effort guess — the user still confirms/adjusts it. */
+function guessMapping(headers: string[]): ColumnMapping {
+  const normalized = headers.map(normalizeHeader);
+  const mapping = {} as ColumnMapping;
+  for (const field of TARGET_FIELDS) {
+    mapping[field.key] = normalized.findIndex((n) => FIELD_ALIASES[field.key].includes(n));
+  }
+  return mapping;
+}
+
+function applyMapping(rows: string[][], mapping: ColumnMapping): CsvLead[] {
+  return rows
+    .map((values) => ({
+      linkedin_url: mapping.linkedin_url >= 0 ? (values[mapping.linkedin_url] ?? '').trim() : '',
+      first_name:   mapping.first_name   >= 0 ? (values[mapping.first_name]   ?? '').trim() : '',
+      last_name:    mapping.last_name    >= 0 ? (values[mapping.last_name]    ?? '').trim() : '',
+      company_name: mapping.company_name >= 0 ? (values[mapping.company_name] ?? '').trim() : '',
+    }))
     .filter((l) => l.linkedin_url.length > 0);
 }
 
@@ -206,6 +238,8 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 | 4 }) {
 /* ─── Main component ─── */
 export default function CampaignNew() {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEditMode = !!editId;
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -230,13 +264,78 @@ export default function CampaignNew() {
   const [stepsConfig, setStepsConfig]   = useState<StepConfig[]>(() => buildSteps('A'));
   const [csvLeads, setCsvLeads]         = useState<CsvLead[]>([]);
   const [csvError, setCsvError]         = useState('');
+  const [csvHeaders, setCsvHeaders]     = useState<string[]>([]);
+  const [csvRows, setCsvRows]           = useState<string[][]>([]);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>({ linkedin_url: -1, first_name: -1, last_name: -1, company_name: -1 });
+  const [showMappingModal, setShowMappingModal] = useState(false);
   const fileInputRef                    = useRef<HTMLInputElement>(null);
   const taRefs                          = useRef<(HTMLTextAreaElement | null)[]>([]);
 
-  /* Rebuild steps when scenario changes */
+  /* ─── Edit mode: load the existing draft ─── */
+  const { data: existingCampaign, isLoading: loadingCampaign } = useQuery({
+    queryKey: ['campaign-edit', editId],
+    queryFn: async () => {
+      const { data: campaign, error: cErr } = await (supabase as any)
+        .from('campaigns')
+        .select('name, scenario_type, persona_id, status')
+        .eq('id', editId)
+        .single();
+      if (cErr) throw cErr;
+      const { data: steps } = await (supabase as any)
+        .from('campaign_steps')
+        .select('step_order, action_type, message_content, delay_days')
+        .eq('campaign_id', editId)
+        .order('step_order');
+      const { data: leads } = await (supabase as any)
+        .from('campaign_leads')
+        .select('linkedin_url, first_name, last_name, company_name')
+        .eq('campaign_id', editId);
+      return { campaign, steps: steps ?? [], leads: leads ?? [] };
+    },
+    enabled: isEditMode,
+  });
+
   useEffect(() => {
-    setStepsConfig(buildSteps(scenarioType));
-  }, [scenarioType]);
+    if (!existingCampaign) return;
+    const { campaign, steps, leads } = existingCampaign;
+
+    if (campaign.status !== 'draft') {
+      toast({
+        variant: 'destructive',
+        title: 'Modification impossible',
+        description: 'Seules les campagnes en brouillon peuvent être modifiées.',
+      });
+      navigate(`/campaigns/${editId}`, { replace: true });
+      return;
+    }
+
+    setName(campaign.name);
+    setScenarioType(campaign.scenario_type);
+    setPersonaId(campaign.persona_id ?? '');
+    if (steps.length > 0) {
+      const template = buildSteps(campaign.scenario_type);
+      setStepsConfig(steps.map((s: any) => {
+        const t = template.find((ts) => ts.step_order === s.step_order);
+        return {
+          step_order: s.step_order,
+          action_type: s.action_type,
+          label: t?.label ?? '',
+          message_content: s.message_content ?? '',
+          delay_days: s.delay_days,
+          editable: t?.editable ?? true,
+        };
+      }));
+    }
+    if (leads.length > 0) {
+      setCsvLeads(leads.map((l: any) => ({
+        linkedin_url: l.linkedin_url,
+        first_name: l.first_name ?? '',
+        last_name: l.last_name ?? '',
+        company_name: l.company_name ?? '',
+      })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingCampaign]);
 
   const { data: personas = [] } = useQuery({
     queryKey: ['personas-filter', user?.id],
@@ -266,7 +365,7 @@ export default function CampaignNew() {
     }, 0);
   }
 
-  /* ─── CSV handler ─── */
+  /* ─── CSV handler: parse the raw file, then let the user confirm the column mapping ─── */
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -274,35 +373,76 @@ export default function CampaignNew() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const leads = parseCSV(text);
-      if (leads.length === 0) {
-        setCsvError('Aucun lead valide trouvé. Vérifiez que votre fichier contient une colonne "linkedin_url".');
+      const { headers, rows } = parseCsvRaw(text);
+      if (headers.length === 0 || rows.length === 0) {
+        setCsvError('Fichier vide ou invalide.');
+        setCsvHeaders([]);
+        setCsvRows([]);
         setCsvLeads([]);
-      } else {
-        setCsvLeads(leads);
+        return;
       }
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setColumnMapping(guessMapping(headers));
+      setShowMappingModal(true);
     };
     reader.readAsText(file);
+    e.target.value = ''; // allow re-selecting the same file to re-open the mapping modal
   }
 
-  /* ─── Shared campaign insert helper ─── */
-  async function insertCampaign(status: 'active' | 'draft') {
+  function confirmMapping() {
+    if (columnMapping.linkedin_url < 0) return;
+    const leads = applyMapping(csvRows, columnMapping);
+    if (leads.length === 0) {
+      setCsvError('Aucun lead valide après mapping — vérifiez la colonne associée à l\'URL LinkedIn.');
+      setCsvLeads([]);
+    } else {
+      setCsvError('');
+      setCsvLeads(leads);
+    }
+    setShowMappingModal(false);
+  }
+
+  /* ─── Shared campaign save helper (insert for new, update for an edited draft) ─── */
+  async function saveCampaign(status: 'active' | 'draft') {
     if (!user) throw new Error('Non authentifié');
 
-    const { data: campaign, error: cErr } = await (supabase as any)
-      .from('campaigns')
-      .insert({
-        user_id:       user.id,
-        name:          name.trim(),
-        scenario_type: scenarioType,
-        persona_id:    (personaId && personaId !== 'none') ? personaId : null,
-        status,
-      })
-      .select('id')
-      .single();
-    if (cErr) throw cErr;
+    let campaignId: string;
 
-    const campaignId: string = campaign.id;
+    if (isEditMode && editId) {
+      const { error: cErr } = await (supabase as any)
+        .from('campaigns')
+        .update({
+          name:          name.trim(),
+          scenario_type: scenarioType,
+          persona_id:    (personaId && personaId !== 'none') ? personaId : null,
+          status,
+        })
+        .eq('id', editId);
+      if (cErr) throw cErr;
+      campaignId = editId;
+
+      // A draft never has campaign_jobs yet (those are only created once a campaign
+      // goes active below), so its steps/leads can be safely replaced wholesale.
+      const { error: delStepsErr } = await (supabase as any).from('campaign_steps').delete().eq('campaign_id', campaignId);
+      if (delStepsErr) throw delStepsErr;
+      const { error: delLeadsErr } = await (supabase as any).from('campaign_leads').delete().eq('campaign_id', campaignId);
+      if (delLeadsErr) throw delLeadsErr;
+    } else {
+      const { data: campaign, error: cErr } = await (supabase as any)
+        .from('campaigns')
+        .insert({
+          user_id:       user.id,
+          name:          name.trim(),
+          scenario_type: scenarioType,
+          persona_id:    (personaId && personaId !== 'none') ? personaId : null,
+          status,
+        })
+        .select('id')
+        .single();
+      if (cErr) throw cErr;
+      campaignId = campaign.id;
+    }
 
     const { error: sErr } = await (supabase as any)
       .from('campaign_steps')
@@ -356,7 +496,7 @@ export default function CampaignNew() {
 
   /* ─── Launch mutation ─── */
   const launch = useMutation({
-    mutationFn: () => insertCampaign('active'),
+    mutationFn: () => saveCampaign('active'),
     onSuccess: (campaignId) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       navigate(`/campaigns/${campaignId}`);
@@ -368,7 +508,7 @@ export default function CampaignNew() {
 
   /* ─── Save draft mutation ─── */
   const saveDraft = useMutation({
-    mutationFn: () => insertCampaign('draft'),
+    mutationFn: () => saveCampaign('draft'),
     onSuccess: (campaignId) => {
       qc.invalidateQueries({ queryKey: ['campaigns'] });
       toast({ title: 'Brouillon enregistré' });
@@ -384,6 +524,16 @@ export default function CampaignNew() {
   const step3Valid = csvLeads.length > 0;
 
   /* ─── Render steps ─── */
+  if (isEditMode && loadingCampaign) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="flex min-h-[calc(100vh-3.5rem)]">
@@ -396,7 +546,7 @@ export default function CampaignNew() {
         </Button>
 
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-foreground">Nouvelle campagne</h1>
+          <h1 className="text-2xl font-bold text-foreground">{isEditMode ? 'Modifier le brouillon' : 'Nouvelle campagne'}</h1>
         </div>
 
         <StepIndicator current={step} />
@@ -435,7 +585,7 @@ export default function CampaignNew() {
                   <button
                     key={s.type}
                     type="button"
-                    onClick={() => setScenarioType(s.type)}
+                    onClick={() => { setScenarioType(s.type); setStepsConfig(buildSteps(s.type)); }}
                     className={[
                       'flex items-start gap-4 rounded-xl border p-4 text-left transition-colors',
                       scenarioType === s.type
@@ -626,9 +776,7 @@ export default function CampaignNew() {
             <div className="space-y-2">
               <Label>Fichier CSV de leads <span className="text-destructive">*</span></Label>
               <p className="text-xs text-muted-foreground">
-                Colonnes attendues : <code className="font-mono">linkedin_url</code> (obligatoire),{' '}
-                <code className="font-mono">first_name</code>, <code className="font-mono">last_name</code>,{' '}
-                <code className="font-mono">company_name</code>
+                Peu importe les noms de colonnes de votre fichier — vous les associerez aux champs attendus juste après l'import.
               </p>
 
               <div
@@ -649,6 +797,15 @@ export default function CampaignNew() {
                 className="hidden"
                 onChange={handleFileChange}
               />
+              {csvHeaders.length > 0 && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setShowMappingModal(true)}
+                >
+                  Modifier le mapping des colonnes
+                </button>
+              )}
               {csvError && <p className="text-xs text-destructive">{csvError}</p>}
             </div>
 
@@ -813,6 +970,56 @@ export default function CampaignNew() {
           </div>
         </div>
       </div>
+
+      {/* ─── Column mapping modal ─── */}
+      <Dialog open={showMappingModal} onOpenChange={setShowMappingModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Faire correspondre les colonnes</DialogTitle>
+            <DialogDescription>
+              Associez les colonnes de votre fichier aux champs attendus par SetterFlow.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {TARGET_FIELDS.map((f) => (
+              <div key={f.key} className="flex items-center justify-between gap-3">
+                <Label className="text-sm">
+                  {f.label} {f.required && <span className="text-destructive">*</span>}
+                </Label>
+                <Select
+                  value={String(columnMapping[f.key])}
+                  onValueChange={(v) => setColumnMapping((prev) => ({ ...prev, [f.key]: Number(v) }))}
+                >
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Non mappé" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!f.required && <SelectItem value="-1">Non mappé</SelectItem>}
+                    {csvHeaders.map((h, i) => (
+                      <SelectItem key={i} value={String(i)}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+
+          {csvRows.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/20 p-2.5 text-xs text-muted-foreground overflow-hidden">
+              <p className="mb-1 font-medium text-foreground">Aperçu de la 1ère ligne</p>
+              <p className="truncate font-mono">{csvRows[0].join(' · ')}</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMappingModal(false)}>Annuler</Button>
+            <Button onClick={confirmMapping} disabled={columnMapping.linkedin_url < 0}>
+              Valider le mapping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

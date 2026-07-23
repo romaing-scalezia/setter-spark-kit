@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowLeft, Play, Pause, CheckCircle2, UserCheck, Mail, Users } from 'lucide-react';
+import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaignDetail } from '@/hooks/useCampaignDetail';
@@ -114,6 +114,13 @@ export default function CampaignDetail() {
                 {detail.status === 'active' ? 'Mettre en pause' : 'Reprendre'}
               </Button>
             )}
+
+            {detail.status === 'draft' && (
+              <Button onClick={() => navigate(`/campaigns/${id}/edit`)}>
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Modifier
+              </Button>
+            )}
           </div>
         </div>
 
@@ -193,6 +200,8 @@ export default function CampaignDetail() {
                         {(() => {
                           const key = lead.error_message
                             ? 'error'
+                            : lead.replied_at
+                            ? 'replied'
                             : lead.messaged_1_at
                             ? 'done'
                             : lead.accepted_at

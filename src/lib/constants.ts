@@ -114,6 +114,7 @@ export const CAMPAIGN_STATUS_STYLES: Record<CampaignStatus, string> = {
 
 // Campaign lead status chips
 export const CAMPAIGN_LEAD_STATUS_STYLES = {
+  replied:  'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
   done:     'bg-primary/10 text-primary border-primary/20',
   accepted: 'bg-success/10 text-success border-success/20',
   invited:  'bg-warning/10 text-warning border-warning/20',
@@ -122,8 +123,9 @@ export const CAMPAIGN_LEAD_STATUS_STYLES = {
 } as const;
 
 export const CAMPAIGN_LEAD_STATUS_LABELS = {
+  replied:  'A répondu',
   done:     'Messagé',
-  accepted: 'Accepté',
+  accepted: 'Invitation acceptée',
   invited:  'Invité',
   error:    'Erreur',
   pending:  'En attente',

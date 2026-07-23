@@ -14,7 +14,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, BarChart2, Trash2 } from 'lucide-react';
+import { Loader2, Plus, BarChart2, Trash2, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaigns } from '@/hooks/useCampaigns';
@@ -151,7 +151,7 @@ export default function Campaigns() {
                   <TableRow
                     key={campaign.id}
                     className="cursor-pointer hover:bg-muted/30"
-                    onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                    onClick={() => navigate(campaign.status === 'draft' ? `/campaigns/${campaign.id}/edit` : `/campaigns/${campaign.id}`)}
                   >
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Switch
@@ -201,14 +201,26 @@ export default function Campaigns() {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => navigate(`/campaigns/${campaign.id}`)}
-                        >
-                          <BarChart2 className="h-4 w-4" />
-                        </Button>
+                        {campaign.status === 'draft' ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => navigate(`/campaigns/${campaign.id}/edit`)}
+                            title="Modifier le brouillon"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                          >
+                            <BarChart2 className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           size="icon"
                           variant="ghost"

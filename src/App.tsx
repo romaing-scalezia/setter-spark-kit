@@ -102,6 +102,7 @@ const App = () => (
             <Route path="/follow-ups" element={<OnboardingGuard><AuthGuard><TrialGuard><FollowUps /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/campaigns" element={<OnboardingGuard><AuthGuard><TrialGuard><Campaigns /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/campaigns/new" element={<OnboardingGuard><AuthGuard><TrialGuard><CampaignNew /></TrialGuard></AuthGuard></OnboardingGuard>} />
+            <Route path="/campaigns/:id/edit" element={<OnboardingGuard><AuthGuard><TrialGuard><CampaignNew /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/campaigns/:id" element={<OnboardingGuard><AuthGuard><TrialGuard><CampaignDetail /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/inbox" element={<OnboardingGuard><AuthGuard><TrialGuard><Inbox /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/coach" element={<OnboardingGuard><AuthGuard requiredRole="coach"><CoachPage /></AuthGuard></OnboardingGuard>} />

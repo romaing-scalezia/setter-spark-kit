@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ const LinkedInLogo = () => (
 
 export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
@@ -46,6 +48,7 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
   const [accountId, setAccountId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [timeLeft, setTimeLeft] = useState(CHECKPOINT_TIMEOUT_S);
+  const [pollingExpired, setPollingExpired] = useState(false);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,6 +71,7 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
     setAccountId(null);
     setCode('');
     setTimeLeft(CHECKPOINT_TIMEOUT_S);
+    setPollingExpired(false);
     stopPolling();
     stopTimer();
   }
@@ -79,32 +83,35 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
     stopTimer();
     setTimeLeft(CHECKPOINT_TIMEOUT_S);
     timerRef.current = setInterval(() => {
-      setTimeLeft(t => { if (t <= 1) { stopTimer(); return 0; } return t - 1; });
+      setTimeLeft(t => {
+        if (t <= 1) {
+          stopTimer();
+          stopPolling(); // stop the in-app-validation poll too — never spin past expiry
+          setPollingExpired(true);
+          return 0;
+        }
+        return t - 1;
+      });
     }, 1000);
   }
 
-  function startInAppPolling(accId: string) {
+  // Poll our own `unipile_accounts` row instead of guessing at Unipile's raw REST
+  // response shape — unipile-webhook is the reliable source of truth: it flips this
+  // row to "connected" once Unipile confirms the async approval (e.g. IN_APP_VALIDATION).
+  function startInAppPolling(userId: string) {
     stopPolling();
     pollingRef.current = setInterval(async () => {
       try {
-        const { data } = await supabase.functions.invoke('unipile-proxy', {
-          body: { action: 'get_account_status', account_id: accId },
-        });
-        // Unipile returns { AccountStatus: { message: "OK" } } or { connection_status: "OK" }
-        const msg =
-          (data as any)?.AccountStatus?.message ??
-          (data as any)?.connection_status ??
-          (data as any)?.status;
-        if (msg === 'OK' || msg === 'connected' || msg === 'CONNECTED') {
+        const { data } = await (supabase.from('unipile_accounts' as any) as any)
+          .select('status')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if ((data as any)?.status === 'connected') {
           stopPolling(); stopTimer();
-          // Upsert unipile_accounts — IN_APP_VALIDATION bypasses create_account upsert
-          await supabase.functions.invoke('unipile-proxy', {
-            body: { action: 'confirm_account', account_id: accId },
-          });
           onSuccess(); onOpenChange(false);
           toast({ title: 'LinkedIn connecté !' });
         }
-      } catch { /* ignore */ }
+      } catch { /* ignore, retry next tick */ }
     }, 3000);
   }
 
@@ -113,9 +120,10 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
     setAccountId(accId);
     setCode('');
     setError(null);
+    setPollingExpired(false);
     setStep('checkpoint');
     startTimer();
-    if (type === 'IN_APP_VALIDATION') startInAppPolling(accId);
+    if (type === 'IN_APP_VALIDATION' && user) startInAppPolling(user.id);
   }
 
   function handleSuccess() {
@@ -198,8 +206,12 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
       if (d?.object === 'Checkpoint') {
         stopPolling();
         setCode('');
+        setPollingExpired(false);
         setCheckpointType(d.checkpoint?.type as CheckpointType);
-        if (d.checkpoint?.type === 'IN_APP_VALIDATION') startInAppPolling(accountId);
+        if (d.checkpoint?.type === 'IN_APP_VALIDATION' && user) {
+          startTimer();
+          startInAppPolling(user.id);
+        }
       }
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erreur', description: err.message });
@@ -281,9 +293,20 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
             <div className="space-y-4 pt-2">
               {checkpointType === 'IN_APP_VALIDATION' ? (
                 <div className="flex flex-col items-center gap-4 py-2">
-                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                  <p className="text-center text-sm text-muted-foreground">Ouvre l'app LinkedIn sur ton téléphone et confirme la connexion.</p>
-                  <Button variant="outline" size="sm" onClick={handleTryAnotherWay} disabled={loading}>Utiliser un code à la place</Button>
+                  {pollingExpired ? (
+                    <>
+                      <p className="rounded-md bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
+                        La confirmation a expiré avant d'être détectée. Réessaie, ou utilise un code de vérification à la place.
+                      </p>
+                      <Button variant="outline" size="sm" onClick={handleTryAnotherWay} disabled={loading}>Utiliser un code à la place</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                      <p className="text-center text-sm text-muted-foreground">Ouvre l'app LinkedIn sur ton téléphone et confirme la connexion.</p>
+                      <Button variant="outline" size="sm" onClick={handleTryAnotherWay} disabled={loading}>Utiliser un code à la place</Button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <form onSubmit={handleSolveCheckpoint} className="space-y-4">

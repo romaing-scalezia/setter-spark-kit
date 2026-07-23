@@ -240,13 +240,24 @@ serve(async (req) => {
           return jsonResponse({ error: "Unipile error", details: data }, res.status);
         }
 
-        // Unipile retourne 201 pour AccountCreated ET Checkpoint — brancher sur data.object
-        if (data?.object === "Checkpoint") {
-          return jsonResponse(data);
-        }
         const admin = createClient(supabaseUrl, serviceRoleKey, {
           auth: { autoRefreshToken: false, persistSession: false },
         });
+
+        // Unipile retourne 201 pour AccountCreated ET Checkpoint — brancher sur data.object
+        if (data?.object === "Checkpoint") {
+          // Seed the row now (status "connecting") so that unipile-webhook can attribute
+          // the async CREATION_SUCCESS/RECONNECTED event (e.g. after IN_APP_VALIDATION
+          // approval) to this user by account_id — otherwise the webhook has no row to
+          // match and silently drops the event, leaving the client polling forever.
+          if (data.account_id) {
+            await admin.from("unipile_accounts").upsert(
+              { user_id: userId, account_id: data.account_id, status: "connecting", updated_at: new Date().toISOString() },
+              { onConflict: "user_id" },
+            );
+          }
+          return jsonResponse(data);
+        }
         await admin.from("unipile_accounts").upsert(
           { user_id: userId, account_id: data.account_id, status: "connected", updated_at: new Date().toISOString() },
           { onConflict: "user_id" },
@@ -278,14 +289,21 @@ serve(async (req) => {
           return jsonResponse({ error: "Unipile error", details: data }, res.status);
         }
 
+        const admin2 = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
         if (data?.object === "Checkpoint") {
+          // Another checkpoint round (e.g. wrong code, or switched to IN_APP_VALIDATION) —
+          // keep the account_id → user mapping fresh for the webhook.
+          await admin2.from("unipile_accounts").upsert(
+            { user_id: userId, account_id, status: "connecting", updated_at: new Date().toISOString() },
+            { onConflict: "user_id" },
+          );
           return jsonResponse(data);
         }
 
         const connectedId = data.account_id ?? account_id;
-        const admin2 = createClient(supabaseUrl, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
         await admin2.from("unipile_accounts").upsert(
           { user_id: userId, account_id: connectedId, status: "connected", updated_at: new Date().toISOString() },
           { onConflict: "user_id" },
@@ -373,34 +391,8 @@ serve(async (req) => {
         );
       }
 
-      case "confirm_account": {
-        // Called after IN_APP_VALIDATION polling detects OK — upserts unipile_accounts
-        const { account_id: confirmId } = body as { account_id?: string };
-        if (!confirmId) return jsonResponse({ error: "Missing 'account_id'" }, 400);
-        const serviceRoleKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-          ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
-        const admin2 = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey2 as string, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        await admin2.from("unipile_accounts").upsert(
-          { user_id: userId, account_id: confirmId, status: "connected", updated_at: new Date().toISOString() },
-          { onConflict: "user_id" },
-        );
-        return jsonResponse({ ok: true });
-      }
-
       case "list_accounts": {
         return await unipileJson("/api/v1/accounts?limit=50", { method: "GET" }, apiKey);
-      }
-
-      case "get_account_status": {
-        const { account_id } = body;
-        if (!account_id) return jsonResponse({ error: "Missing 'account_id'" }, 400);
-        return await unipileJson(
-          `/api/v1/accounts/${encodeURIComponent(account_id)}`,
-          { method: "GET" },
-          apiKey,
-        );
       }
 
       default:
