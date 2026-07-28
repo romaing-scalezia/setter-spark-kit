@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
+import { ProductTour } from '@/components/ProductTour';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
+      <ProductTour />
     </SidebarProvider>
   );
 }

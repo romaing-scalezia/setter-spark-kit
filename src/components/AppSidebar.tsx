@@ -51,24 +51,24 @@ function LogoMark() {
   );
 }
 
-type NavDef = { title: string; url: string; icon: string; roles: string[]; badge?: string };
+type NavDef = { title: string; url: string; icon: string; roles: string[]; badge?: string; tour?: string };
 
 const navMain: NavDef[] = [
-  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',      roles: ['user', 'admin'] },
-  { title: 'Inbox',      url: '/inbox',       icon: 'inbox',     roles: ['user', 'admin'] },
-  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'admin'] },
-  { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'admin'] },
-  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'admin'] },
+  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',      roles: ['user', 'admin'], tour: 'dashboard' },
+  { title: 'Inbox',      url: '/inbox',       icon: 'inbox',     roles: ['user', 'admin'], tour: 'inbox' },
+  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'admin'], tour: 'campaigns' },
+  { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'admin'], tour: 'leads' },
+  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'admin'], tour: 'followup' },
   { title: 'Supervision', url: '/coach',      icon: 'supervision', roles: ['coach'] },
 ];
 
 const navResources: NavDef[] = [
-  { title: 'Ressources',  url: '/ressources',  icon: 'res',    roles: ['user', 'coach', 'admin'] },
+  { title: 'Ressources',  url: '/ressources',  icon: 'res',    roles: ['user', 'coach', 'admin'], tour: 'resources' },
   { title: 'Leaderboard', url: '/leaderboard', icon: 'trophy', roles: ['user', 'coach', 'admin'] },
 ];
 
 const navSettings: NavDef[] = [
-  { title: 'Paramètres', url: '/settings', icon: 'settings', roles: ['user', 'coach', 'admin'] },
+  { title: 'Paramètres', url: '/settings', icon: 'settings', roles: ['user', 'coach', 'admin'], tour: 'settings' },
 ];
 
 function NavItem({ item, collapsed }: { item: NavDef; collapsed: boolean }) {
@@ -81,6 +81,7 @@ function NavItem({ item, collapsed }: { item: NavDef; collapsed: boolean }) {
       type="button"
       onClick={() => navigate(item.url)}
       title={collapsed ? item.title : undefined}
+      data-tour={item.tour}
       className={[
         'relative flex w-full items-center gap-[11px] rounded-[9px] px-[11px] py-[9px]',
         'text-[13px] font-medium transition-colors duration-150',

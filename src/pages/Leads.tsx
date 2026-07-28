@@ -20,14 +20,15 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Search, ExternalLink, Trash2, Merge, LayoutGrid, List } from 'lucide-react';
+import { Plus, Search, ExternalLink, Trash2, Merge, LayoutGrid, List, ChevronDown } from 'lucide-react';
 import { format, isToday, isBefore, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import type { Lead, LeadStatus } from '@/lib/constants';
-import { STATUS_CONFIG, TARGET_TYPES, SECTORS, COMPANY_SIZES } from '@/lib/constants';
+import type { Lead, LeadStatus, LossReason } from '@/lib/constants';
+import { STATUS_CONFIG, TARGET_TYPES, SECTORS, COMPANY_SIZES, LOSS_REASONS } from '@/lib/constants';
 import { scoreLead, TEMPERATURE_CONFIG, type LeadTemperature } from '@/lib/leadScoring';
 import type { Persona } from '@/pages/Personas';
 import { useTeammates, teammateLabel } from '@/hooks/useTeammates';
@@ -60,6 +61,7 @@ export default function Leads() {
   const [sectorFilter, setSectorFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [sizeFilter, setSizeFilter] = useState('all');
+  const [lossReasonFilter, setLossReasonFilter] = useState<Set<LossReason>>(new Set());
   const [setterFilter, setSetterFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('score_desc');
   const { teammates, isTeam } = useTeammates();
@@ -387,6 +389,14 @@ export default function Leads() {
     setCloseWonModalOpen(false);
   };
 
+  const toggleLossReason = (reason: LossReason) => {
+    setLossReasonFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(reason)) next.delete(reason); else next.add(reason);
+      return next;
+    });
+  };
+
   const getPersona = (lead: Lead) => {
     const pid = (lead as any).persona_id;
     if (!pid) return null;
@@ -465,6 +475,9 @@ export default function Leads() {
         return p?.company_size === sizeFilter;
       });
     }
+    if (lossReasonFilter.size > 0) {
+      results = results.filter((sl) => sl.lead.loss_reason && lossReasonFilter.has(sl.lead.loss_reason as LossReason));
+    }
     if (adminOwnerFilter) {
       results = results.filter((sl) => sl.lead.owner_id === adminOwnerFilter);
     }
@@ -490,7 +503,7 @@ export default function Leads() {
     else if (sortBy === 'score_asc') results = [...results].sort((a, b) => a.score - b.score);
     else if (sortBy === 'name') results = [...results].sort((a, b) => a.lead.first_name.localeCompare(b.lead.first_name));
     return results;
-  }, [scoredLeads, statusFilter, tempFilter, outreachFilter, followUpLevelFilter, sectorFilter, typeFilter, sizeFilter, setterFilter, search, sortBy, personaMap, adminOwnerFilter, adminTeamIds]);
+  }, [scoredLeads, statusFilter, tempFilter, outreachFilter, followUpLevelFilter, sectorFilter, typeFilter, sizeFilter, lossReasonFilter, setterFilter, search, sortBy, personaMap, adminOwnerFilter, adminTeamIds]);
 
   const getFollowUpBadge = (lead: Lead) => {
     if (!lead.follow_up_date || lead.status !== 'follow_up') return null;
@@ -509,7 +522,7 @@ export default function Leads() {
     );
   };
 
-  const hasActiveFilters = sectorFilter !== 'all' || typeFilter !== 'all' || sizeFilter !== 'all' || outreachFilter !== 'all' || followUpLevelFilter !== 'all';
+  const hasActiveFilters = sectorFilter !== 'all' || typeFilter !== 'all' || sizeFilter !== 'all' || outreachFilter !== 'all' || followUpLevelFilter !== 'all' || lossReasonFilter.size > 0;
 
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -670,8 +683,42 @@ export default function Leads() {
               {COMPANY_SIZES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 justify-between gap-1.5 text-xs font-normal w-[170px]"
+                data-testid="leads-loss-reason-filter"
+              >
+                {lossReasonFilter.size === 0 ? 'Raison de la perte' : `Raison de la perte (${lossReasonFilter.size})`}
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" align="start">
+              <div className="space-y-1">
+                {(Object.entries(LOSS_REASONS) as [LossReason, string][]).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={lossReasonFilter.has(value)}
+                      onCheckedChange={() => toggleLossReason(value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {lossReasonFilter.size > 0 && (
+                <Button variant="ghost" size="sm" className="mt-1 w-full h-7 text-xs" onClick={() => setLossReasonFilter(new Set())}>
+                  Effacer
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSectorFilter('all'); setTypeFilter('all'); setSizeFilter('all'); setOutreachFilter('all'); setFollowUpLevelFilter('all'); }}>
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setSectorFilter('all'); setTypeFilter('all'); setSizeFilter('all'); setOutreachFilter('all'); setFollowUpLevelFilter('all'); setLossReasonFilter(new Set()); }}>
               Réinitialiser
             </Button>
           )}
