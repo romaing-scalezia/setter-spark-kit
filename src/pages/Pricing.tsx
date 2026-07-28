@@ -28,7 +28,7 @@ function LogoMark() {
 }
 
 const PRICE_NORMAL = 30;
-const PRICE_STARTERPACK = 15;
+const PRICE_STARTERPACK = 20;
 
 export default function Pricing() {
   const navigate = useNavigate();
@@ -94,7 +94,7 @@ export default function Pricing() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground line-through">{PRICE_NORMAL}€</span>
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5">-50% Starterpack</span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5">Tarif StarterPack</span>
                     </div>
                   </div>
                 ) : (
