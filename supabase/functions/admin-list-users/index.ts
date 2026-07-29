@@ -76,7 +76,7 @@ serve(async (req) => {
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("coach_assignments").select("*"),
       supabaseAdmin.from("unipile_accounts" as any).select("user_id, status, account_id"),
-      supabaseAdmin.from("leads").select("owner_id"),
+      supabaseAdmin.rpc("get_leads_count_by_owner"),
       supabaseAdmin.from("campaign_jobs" as any).select("id, status, error_message, created_at").eq("status", "error").order("created_at", { ascending: false }).limit(50),
     ]);
 
@@ -85,11 +85,12 @@ serve(async (req) => {
     const roleMap = new Map((roles || []).map((r: any) => [r.user_id, r.role]));
     const unipileMap = new Map((unipileAccounts || []).map((a: any) => [a.user_id, a]));
 
-    // Count leads per user
-    const leadsCountMap = new Map<string, number>();
-    for (const l of leadCounts || []) {
-      leadsCountMap.set(l.owner_id, (leadsCountMap.get(l.owner_id) || 0) + 1);
-    }
+    // Count leads per user. Aggregated server-side (GROUP BY owner_id) instead of
+    // fetching every lead row: avoids PostgREST's default 1000-row cap silently
+    // truncating the result once the table grows past it.
+    const leadsCountMap = new Map<string, number>(
+      (leadCounts || []).map((l: any) => [l.owner_id, Number(l.lead_count)])
+    );
 
     // Live Stripe lookup: local `memberships` rows only mirror webhook events, which can
     // drift (missed events, hardcoded plan on checkout, etc). Pulling the subscription
