@@ -3,6 +3,7 @@ import { driver, type DriveStep } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import { LayoutDashboard, Inbox, Zap, Users, Bell, BookOpen, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const TOUR_DONE_KEY = 'sf_tour_done';
 
@@ -33,10 +34,23 @@ const TOUR_STEPS: DriveStep[] = MENU_ITEMS.map(item => ({
 }));
 
 export function useProductTour() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [tourDone, setTourDone] = useState(() => localStorage.getItem(TOUR_DONE_KEY) === 'true');
 
+  const markTourSeen = useCallback(() => {
+    localStorage.setItem(TOUR_DONE_KEY, 'true');
+    setTourDone(true);
+    if (user) {
+      (supabase as any).from('profiles').update({ product_tour_seen: true }).eq('id', user.id);
+    }
+  }, [user]);
+
   const startTour = useCallback((onFinish?: () => void) => {
+    // Marked as seen immediately (not just on completion) so the tour
+    // doesn't reappear on the next login if the user closes the tab
+    // instead of finishing or explicitly dismissing it.
+    markTourSeen();
+
     const tourInstance = driver({
       showProgress: true,
       progressText: '{{current}} sur {{total}}',
@@ -46,15 +60,13 @@ export function useProductTour() {
       allowClose: true,
       steps: TOUR_STEPS,
       onDestroyed: () => {
-        localStorage.setItem(TOUR_DONE_KEY, 'true');
-        setTourDone(true);
         onFinish?.();
       },
     });
     tourInstance.drive();
-  }, []);
+  }, [markTourSeen]);
 
-  const shouldShowTour = !!profile?.onboarding_completed && !tourDone;
+  const shouldShowTour = !!profile?.onboarding_completed && !profile?.product_tour_seen && !tourDone;
 
   return { shouldShowTour, startTour };
 }

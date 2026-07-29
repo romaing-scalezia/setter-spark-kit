@@ -433,6 +433,7 @@ export type Database = {
           industry: string | null
           monthly_revenue: string | null
           onboarding_completed: boolean
+          product_tour_seen: boolean
           prospecting_volume: string | null
           role: Database["public"]["Enums"]["app_role"]
           updated_at: string
@@ -448,6 +449,7 @@ export type Database = {
           industry?: string | null
           monthly_revenue?: string | null
           onboarding_completed?: boolean
+          product_tour_seen?: boolean
           prospecting_volume?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string
@@ -463,6 +465,7 @@ export type Database = {
           industry?: string | null
           monthly_revenue?: string | null
           onboarding_completed?: boolean
+          product_tour_seen?: boolean
           prospecting_volume?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           updated_at?: string

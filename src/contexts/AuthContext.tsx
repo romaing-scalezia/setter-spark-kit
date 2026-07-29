@@ -13,6 +13,7 @@ type ProfileData = {
   debug_role_switch_enabled: boolean;
   onboarding_completed: boolean;
   source: string | null;
+  product_tour_seen: boolean;
 };
 
 interface AuthContextType {
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
-        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source').eq('id', userId).single(),
+        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source, product_tour_seen').eq('id', userId).single(),
         (supabase as any).from('memberships').select('plan, status, current_period_end').eq('user_id', userId).maybeSingle(),
       ]);
 
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           debug_role_switch_enabled: profileRes.data.debug_role_switch_enabled ?? false,
           onboarding_completed: profileRes.data.onboarding_completed ?? false,
           source: (profileRes.data as any).source ?? null,
+          product_tour_seen: (profileRes.data as any).product_tour_seen ?? false,
         });
       }
 
