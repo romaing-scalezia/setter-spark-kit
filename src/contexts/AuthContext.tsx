@@ -16,6 +16,13 @@ type ProfileData = {
   product_tour_seen: boolean;
 };
 
+type ProspectQuota = {
+  used: number;
+  total: number;
+  remaining: number;
+  resetAt: string | null;
+};
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -25,6 +32,8 @@ interface AuthContextType {
   plan: MembershipPlan;
   membershipStatus: MembershipStatus;
   trialEndsAt: string | null;
+  prospectQuota: ProspectQuota;
+  hasSalesNav: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -41,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<MembershipPlan>('free');
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus>('trialing');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [prospectQuota, setProspectQuota] = useState<ProspectQuota>({ used: 0, total: 400, remaining: 400, resetAt: null });
+  const [hasSalesNav, setHasSalesNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
@@ -55,8 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
-        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source, product_tour_seen').eq('id', userId).single(),
-        (supabase as any).from('memberships').select('plan, status, current_period_end').eq('user_id', userId).maybeSingle(),
+        supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source, product_tour_seen, has_sales_nav').eq('id', userId).single(),
+        (supabase as any).from('memberships').select('plan, status, current_period_end, prospects_imported_count, prospects_imported_reset_at').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (rolesRes.data?.role) {
@@ -77,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           source: (profileRes.data as any).source ?? null,
           product_tour_seen: (profileRes.data as any).product_tour_seen ?? false,
         });
+        setHasSalesNav((profileRes.data as any).has_sales_nav ?? false);
       }
 
       let membership = membershipRes?.data;
@@ -97,6 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPlan((membership?.plan as MembershipPlan) ?? 'free');
       setMembershipStatus((membership?.status as MembershipStatus) ?? 'trialing');
       setTrialEndsAt(membership?.current_period_end ?? null);
+
+      const quotaMap: Record<string, number> = { free: 400, starter: 400, pro: 2000, coach: 0 };
+      const planKey = (membership?.plan as string) ?? 'free';
+      const total = quotaMap[planKey] ?? 0;
+      const used = membership?.prospects_imported_count ?? 0;
+      setProspectQuota({ used, total, remaining: Math.max(0, total - used), resetAt: membership?.prospects_imported_reset_at ?? null });
     } catch (err) {
       console.error('fetchUserData error:', err);
       setRoles(['user']);
@@ -165,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeRole = roles[0] || profile?.role || 'user';
 
   return (
-    <AuthContext.Provider value={{ user, session, roles, activeRole, profile, plan, membershipStatus, trialEndsAt, loading, signOut, refreshUserData, switchRole }}>
+    <AuthContext.Provider value={{ user, session, roles, activeRole, profile, plan, membershipStatus, trialEndsAt, prospectQuota, hasSalesNav, loading, signOut, refreshUserData, switchRole }}>
       {children}
     </AuthContext.Provider>
   );

@@ -65,6 +65,8 @@ serve(async (req) => {
       eventType === "SYNC_SUCCESS" ||
       eventType === "CONNECTED"
     ) {
+      let userId: string | undefined;
+
       if (name) {
         // Flat format with user UUID in name field
         const { error } = await admin
@@ -74,7 +76,7 @@ serve(async (req) => {
             { onConflict: "user_id" },
           );
         if (error) console.error("[unipile-webhook] upsert error:", error);
-        return jsonResponse({ received: true, action: "connected" }, 200);
+        userId = name;
       } else {
         // Nested format (AccountStatus) — find user by existing account_id or skip
         const { data: existing } = await admin
@@ -87,12 +89,47 @@ serve(async (req) => {
             .from("unipile_accounts")
             .update({ status: "connected", updated_at: new Date().toISOString() })
             .eq("account_id", account_id);
-          return jsonResponse({ received: true, action: "reconnected" }, 200);
+          userId = existing.user_id;
+        } else {
+          console.warn("[unipile-webhook] SYNC_SUCCESS without name, account_id:", account_id);
+          return jsonResponse({ received: true, action: "skipped_no_name" }, 200);
         }
-        // No user found for this account_id — can't link without name
-        console.warn("[unipile-webhook] SYNC_SUCCESS without name, account_id:", account_id);
-        return jsonResponse({ received: true, action: "skipped_no_name" }, 200);
       }
+
+      // ── Détection Sales Navigator ──
+      if (userId) {
+        try {
+          const unipileUrl = Deno.env.get("UNIPILE_URL");
+          const unipileKey = Deno.env.get("UNIPILE_API_KEY");
+          if (unipileUrl && unipileKey) {
+            const meRes = await fetch(`${unipileUrl}/api/v1/users/me?account_id=${account_id}`, {
+              headers: { "X-API-KEY": unipileKey, "accept": "application/json" },
+            });
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              // Sales Nav détecté si premium_subscriber ou sales_navigator présent dans le profil
+              const hasSalesNav = !!(
+                meData?.sales_navigator ||
+                meData?.premium_subscriber === true ||
+                meData?.subscriptions?.some((s: any) =>
+                  typeof s === "string"
+                    ? s.toLowerCase().includes("sales")
+                    : s?.type?.toLowerCase?.()?.includes("sales")
+                )
+              );
+              await admin
+                .from("profiles")
+                .update({ has_sales_nav: hasSalesNav, sales_nav_checked_at: new Date().toISOString() })
+                .eq("id", userId);
+              console.log(`[unipile-webhook] has_sales_nav=${hasSalesNav} for user ${userId}`);
+            }
+          }
+        } catch (err) {
+          console.error("[unipile-webhook] sales nav check error:", err);
+        }
+      }
+
+      return jsonResponse({ received: true, action: "connected" }, 200);
     }
 
     // ── Acceptation d'invitation LinkedIn ──

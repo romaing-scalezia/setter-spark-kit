@@ -13,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Upload, Check, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Upload, Check, Loader2, Info, Linkedin } from 'lucide-react';
+import { SalesNavImportModal, type SalesNavProspect } from '@/components/SalesNavImportModal';
 
 /* ─── Types ─── */
 type ScenarioType = 'A' | 'B' | 'C' | 'D';
@@ -240,7 +241,7 @@ export default function CampaignNew() {
   const navigate = useNavigate();
   const { id: editId } = useParams<{ id: string }>();
   const isEditMode = !!editId;
-  const { user } = useAuth();
+  const { user, hasSalesNav } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { account: unipileAccount, loading: unipileLoading } = useUnipileAccount();
@@ -268,6 +269,8 @@ export default function CampaignNew() {
   const [csvRows, setCsvRows]           = useState<string[][]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({ linkedin_url: -1, first_name: -1, last_name: -1, company_name: -1 });
   const [showMappingModal, setShowMappingModal] = useState(false);
+  const [showSalesNavModal, setShowSalesNavModal] = useState(false);
+  const [salesNavCount, setSalesNavCount] = useState(0);
   const fileInputRef                    = useRef<HTMLInputElement>(null);
   const taRefs                          = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -456,6 +459,16 @@ export default function CampaignNew() {
         }))
       );
     if (sErr) throw sErr;
+
+    // Décrémente le quota Sales Nav uniquement au lancement (pas sur brouillon)
+    if (status === 'active' && salesNavCount > 0) {
+      const { data: quotaData } = await supabase.functions.invoke('sales-nav-import', {
+        body: { action: 'confirm', count: salesNavCount },
+      });
+      if (quotaData?.error === 'quota_exceeded') {
+        throw new Error(`Quota mensuel Sales Navigator dépassé (${quotaData.current}/${quotaData.quota})`);
+      }
+    }
 
     if (csvLeads.length > 0) {
       const { data: insertedLeads, error: lErr } = await (supabase as any)
@@ -773,6 +786,40 @@ export default function CampaignNew() {
         {/* ─── Step 3 : Import CSV ─── */}
         {step === 3 && (
           <div className="space-y-5">
+
+            {/* Sales Navigator import */}
+            <div className="space-y-2">
+              <Label>Importer depuis Sales Navigator</Label>
+              {hasSalesNav ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setShowSalesNavModal(true)}
+                >
+                  <Linkedin className="h-4 w-4 text-[#0077B5]" />
+                  Importer depuis Sales Navigator
+                </Button>
+              ) : (
+                <div
+                  className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 cursor-not-allowed"
+                  title="Sales Navigator requis"
+                >
+                  <Linkedin className="h-4 w-4 text-muted-foreground/50" />
+                  <span className="text-sm text-muted-foreground/50">Importer depuis Sales Navigator</span>
+                  <span className="ml-auto text-[10px] font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                    Sales Navigator requis
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="relative flex items-center gap-3">
+              <div className="flex-1 border-t border-border" />
+              <span className="text-xs text-muted-foreground">ou</span>
+              <div className="flex-1 border-t border-border" />
+            </div>
+
             <div className="space-y-2">
               <Label>Fichier CSV de leads <span className="text-destructive">*</span></Label>
               <p className="text-xs text-muted-foreground">
@@ -1020,6 +1067,26 @@ export default function CampaignNew() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SalesNavImportModal
+        open={showSalesNavModal}
+        onClose={() => setShowSalesNavModal(false)}
+        onImported={(newProspects: SalesNavProspect[]) => {
+          const mapped: CsvLead[] = newProspects.map((p) => ({
+            linkedin_url: p.linkedin_url ?? '',
+            first_name:   p.first_name ?? '',
+            last_name:    p.last_name ?? '',
+            company_name: p.company_name ?? '',
+          }));
+          setCsvLeads((prev) => {
+            const existing = new Set(prev.map((l) => l.linkedin_url));
+            const fresh = mapped.filter((l) => l.linkedin_url && !existing.has(l.linkedin_url));
+            setSalesNavCount((c) => c + fresh.length);
+            return [...prev, ...fresh];
+          });
+          setShowSalesNavModal(false);
+        }}
+      />
     </AppLayout>
   );
 }
