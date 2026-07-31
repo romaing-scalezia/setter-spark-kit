@@ -2,10 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const UNIPILE_BASE_URL     = "https://api20.unipile.com:15052";
-const MAX_VISITS_PER_DAY   = 80;
+const MAX_VISITS_PER_DAY   = 20;
 const MAX_INVITES_PER_DAY  = 20;
-const MAX_MESSAGES_PER_DAY = 50;
-const JOBS_PER_USER        = 15; // jobs traités par user par run
+const MAX_MESSAGES_PER_DAY = 20;
+const JOBS_PER_USER        = 3; // jobs traités par user par run (délai 20-45s entre chaque → ~2min max)
 const MAX_PARALLEL_USERS   = 20; // users traités en parallèle par run
 
 const corsHeaders = {
@@ -93,20 +93,8 @@ serve(async (req) => {
 
   // ── Traitement séquentiel des jobs d'un user ──────────────────────────────
   async function processUser(userId: string): Promise<number> {
-    // Récupère les jobs pending de cet user (séquentiels pour respecter les quotas LinkedIn)
-    const { data: jobs, error: jobsError } = await admin
-      .from("campaign_jobs")
-      .select("*, campaign_leads(*), campaigns(user_id)")
-      .eq("status", "pending")
-      .eq("user_id", userId)
-      .lte("execute_at", now)
-      .order("execute_at", { ascending: true })
-      .limit(JOBS_PER_USER);
-
-    console.log(`[campaign-runner] user ${userId}: ${jobs?.length ?? 0} jobs, error: ${jobsError?.message ?? 'none'}`);
-    if (jobsError || !jobs || jobs.length === 0) return 0;
-
-    // Récupère les compteurs journaliers de cet user
+    // Récupère les compteurs journaliers AVANT de fetcher les jobs
+    // pour exclure dès la requête les action_types dont le quota est plein
     const { data: doneToday } = await admin
       .from("campaign_jobs")
       .select("action_type")
@@ -120,6 +108,33 @@ serve(async (req) => {
       else if (j.action_type === "invite")          counts.invites++;
       else if (j.action_type.startsWith("message")) counts.messages++;
     }
+
+    // Construit la liste des action_types dont le quota n'est pas plein
+    const availableTypes: string[] = [];
+    if (counts.visits   < MAX_VISITS_PER_DAY)   availableTypes.push("visit");
+    if (counts.invites  < MAX_INVITES_PER_DAY)  availableTypes.push("invite");
+    if (counts.messages < MAX_MESSAGES_PER_DAY) {
+      availableTypes.push("message_1", "message_2", "message_3");
+    }
+
+    if (availableTypes.length === 0) {
+      console.log(`[campaign-runner] user ${userId}: all quotas full`);
+      return 0;
+    }
+
+    // Récupère uniquement les jobs dont le type n'est pas à quota
+    const { data: jobs, error: jobsError } = await admin
+      .from("campaign_jobs")
+      .select("*, campaign_leads(*), campaigns(user_id)")
+      .eq("status", "pending")
+      .eq("user_id", userId)
+      .lte("execute_at", now)
+      .in("action_type", availableTypes)
+      .order("execute_at", { ascending: true })
+      .limit(JOBS_PER_USER);
+
+    console.log(`[campaign-runner] user ${userId}: ${jobs?.length ?? 0} jobs, error: ${jobsError?.message ?? 'none'}`);
+    if (jobsError || !jobs || jobs.length === 0) return 0;
 
     // Récupère le compte Unipile une seule fois pour cet user
     const { data: unipileAccount } = await admin
@@ -358,9 +373,44 @@ serve(async (req) => {
       }
 
       processed++;
+
+      // Délai aléatoire entre chaque action pour éviter la détection LinkedIn (20-45s)
+      if (processed < jobs.length) {
+        const delay = 20000 + Math.floor(Math.random() * 25000);
+        await new Promise((r) => setTimeout(r, delay));
+      }
     }
 
     return processed;
+  }
+
+  // Planifie à une heure aléatoire dans la fenêtre 8h-20h (Europe/Paris) du bon jour
+  function scheduleInWorkingHours(delayDays: number): string {
+    const target = new Date(Date.now() + delayDays * 24 * 60 * 60 * 1000);
+
+    // Heure actuelle en Europe/Paris
+    const nowParis = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" }));
+    const currentHour = nowParis.getHours();
+
+    // Si delayDays = 0 et qu'on est déjà après 18h, décale au lendemain
+    if (delayDays === 0 && currentHour >= 18) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    // Choisit une heure aléatoire entre 8h et 20h (en minutes depuis minuit)
+    const WORK_START = 8 * 60;  // 8h00
+    const WORK_END   = 20 * 60; // 20h00
+    const randomMinute = WORK_START + Math.floor(Math.random() * (WORK_END - WORK_START));
+
+    // Applique cette heure au jour cible (en UTC, en tenant compte du décalage Paris +1 ou +2)
+    const offsetMinutes = new Date().getTimezoneOffset(); // toujours 0 en Deno (UTC)
+    const parisOffset = target.toLocaleString("en-US", { timeZone: "Europe/Paris", timeZoneName: "short" })
+      .includes("GMT+2") ? 2 : 1;
+
+    target.setUTCHours(0, 0, 0, 0);
+    target.setUTCMinutes(randomMinute - parisOffset * 60);
+
+    return target.toISOString();
   }
 
   async function scheduleNextStep(job: any, lead: any) {
@@ -379,9 +429,7 @@ serve(async (req) => {
       return;
     }
 
-    const executeAt = new Date(
-      Date.now() + nextStep.delay_days * 24 * 60 * 60 * 1000
-    ).toISOString();
+    const executeAt = scheduleInWorkingHours(nextStep.delay_days);
 
     await admin.from("campaign_jobs").insert({
       campaign_id:      job.campaign_id,

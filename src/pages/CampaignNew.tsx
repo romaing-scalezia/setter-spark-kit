@@ -487,19 +487,45 @@ export default function CampaignNew() {
       if (lErr) throw lErr;
 
       if (status === 'active') {
-        const now = new Date().toISOString();
-        const { error: jErr } = await (supabase as any)
-          .from('campaign_jobs')
-          .insert(
-            (insertedLeads ?? []).map((lead: { id: string }) => ({
-              campaign_id:      campaignId,
-              campaign_lead_id: lead.id,
-              user_id:          user.id,
-              action_type:      'visit',
-              status:           'pending',
-              execute_at:       now,
-            }))
-          );
+        const WORK_START     = 8 * 60;   // 8h en minutes
+        const WORK_END       = 20 * 60;  // 20h en minutes
+        const MAX_PER_DAY    = 20;
+        const PARIS_OFFSET   = new Date()
+          .toLocaleString('en-US', { timeZone: 'Europe/Paris', timeZoneName: 'short' })
+          .includes('GMT+2') ? 2 : 1;
+
+        // Shuffle pour répartir équitablement les jours sans biais d'ordre d'ajout
+        const leads = [...(insertedLeads ?? [])].sort(() => Math.random() - 0.5);
+
+        // Calcule à partir de quel jour commencer selon l'heure actuelle
+        const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const currentMinute = nowParis.getHours() * 60 + nowParis.getMinutes();
+        // Si on est après 18h, on ne démarre pas aujourd'hui
+        let startDayOffset = currentMinute >= 18 * 60 ? 1 : 0;
+
+        const jobsToInsert = leads.map((lead: { id: string }, index: number) => {
+          const dayOffset  = startDayOffset + Math.floor(index / MAX_PER_DAY);
+          const randomMinute = WORK_START + Math.floor(Math.random() * (WORK_END - WORK_START));
+
+          const executeAt = new Date();
+          executeAt.setUTCHours(0, 0, 0, 0);
+          executeAt.setDate(executeAt.getDate() + dayOffset);
+          executeAt.setUTCMinutes(randomMinute - PARIS_OFFSET * 60);
+
+          // Si le créneau calculé est déjà passé (lancement en cours de journée), démarre maintenant
+          if (executeAt < new Date()) executeAt.setTime(Date.now());
+
+          return {
+            campaign_id:      campaignId,
+            campaign_lead_id: lead.id,
+            user_id:          user.id,
+            action_type:      'visit',
+            status:           'pending',
+            execute_at:       executeAt.toISOString(),
+          };
+        });
+
+        const { error: jErr } = await (supabase as any).from('campaign_jobs').insert(jobsToInsert);
         if (jErr) throw jErr;
       }
     }

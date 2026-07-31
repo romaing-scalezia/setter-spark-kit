@@ -67,29 +67,8 @@ export default function Leads() {
   const { teammates, isTeam } = useTeammates();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Admin overrides: filter by ?owner=id or ?team=id1,id2
-  const adminOwnerFilter = isAdmin ? searchParams.get('owner') : null;
-  const adminTeamFilter = isAdmin ? searchParams.get('team') : null;
-  const adminTeamIds = useMemo(
-    () => (adminTeamFilter ? adminTeamFilter.split(',').filter(Boolean) : null),
-    [adminTeamFilter]
-  );
-
-  // For admin, fetch all profiles to build setter list
-  const { data: adminProfiles = [] } = useQuery({
-    queryKey: ['admin-leads-profiles'],
-    queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, email, avatar_url');
-      return (data || []) as Array<{ id: string; full_name: string | null; email: string | null; avatar_url: string | null }>;
-    },
-    enabled: isAdmin,
-  });
-
-  const effectiveTeammates = isAdmin && adminProfiles.length > 0
-    ? adminProfiles.map((p) => ({ id: p.id, full_name: p.full_name, email: p.email, avatar_url: p.avatar_url }))
-    : teammates;
-  const showSetterUI = isAdmin || isTeam;
-  const teammateMap = useMemo(() => new Map(effectiveTeammates.map((t) => [t.id, t])), [effectiveTeammates]);
+  const showSetterUI = !isAdmin && isTeam;
+  const teammateMap = useMemo(() => new Map(teammates.map((t) => [t.id, t])), [teammates]);
   const [createOpen, setCreateOpen] = useState(false);
 
   // Selection state
@@ -478,13 +457,6 @@ export default function Leads() {
     if (lossReasonFilter.size > 0) {
       results = results.filter((sl) => sl.lead.loss_reason && lossReasonFilter.has(sl.lead.loss_reason as LossReason));
     }
-    if (adminOwnerFilter) {
-      results = results.filter((sl) => sl.lead.owner_id === adminOwnerFilter);
-    }
-    if (adminTeamIds && adminTeamIds.length > 0) {
-      const ids = new Set(adminTeamIds);
-      results = results.filter((sl) => ids.has(sl.lead.owner_id));
-    }
     if (setterFilter !== 'all') {
       results = results.filter((sl) => ((sl.lead as any).setter_id || sl.lead.owner_id) === setterFilter);
     }
@@ -503,7 +475,7 @@ export default function Leads() {
     else if (sortBy === 'score_asc') results = [...results].sort((a, b) => a.score - b.score);
     else if (sortBy === 'name') results = [...results].sort((a, b) => a.lead.first_name.localeCompare(b.lead.first_name));
     return results;
-  }, [scoredLeads, statusFilter, tempFilter, outreachFilter, followUpLevelFilter, sectorFilter, typeFilter, sizeFilter, lossReasonFilter, setterFilter, search, sortBy, personaMap, adminOwnerFilter, adminTeamIds]);
+  }, [scoredLeads, statusFilter, tempFilter, outreachFilter, followUpLevelFilter, sectorFilter, typeFilter, sizeFilter, lossReasonFilter, setterFilter, search, sortBy, personaMap]);
 
   const getFollowUpBadge = (lead: Lead) => {
     if (!lead.follow_up_date || lead.status !== 'follow_up') return null;
@@ -568,22 +540,6 @@ export default function Leads() {
           </div>
         </div>
 
-        {isAdmin && (adminOwnerFilter || adminTeamIds) && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3" data-testid="admin-scope-banner">
-            <div className="text-sm">
-              <span className="font-medium text-primary">Vue admin filtrée · </span>
-              {adminOwnerFilter && (
-                <span>leads de <strong>{teammateLabel(teammateMap.get(adminOwnerFilter))}</strong></span>
-              )}
-              {adminTeamIds && (
-                <span>leads de l'équipe ({adminTeamIds.length} membres)</span>
-              )}
-            </div>
-            <Button size="sm" variant="ghost" onClick={() => setSearchParams({}, { replace: true })}>
-              Réinitialiser
-            </Button>
-          </div>
-        )}
 
         {/* Bulk actions bar */}
         {selectedIds.size > 0 && (
@@ -652,7 +608,7 @@ export default function Leads() {
               <SelectTrigger className="w-[180px]" data-testid="leads-setter-filter"><SelectValue placeholder="Tous setters" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tous setters</SelectItem>
-                {effectiveTeammates.map((t) => (
+                {teammates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{teammateLabel(t)}{t.id === user?.id ? ' (vous)' : ''}</SelectItem>
                 ))}
               </SelectContent>
