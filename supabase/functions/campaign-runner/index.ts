@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const UNIPILE_BASE_URL = "https://api20.unipile.com:15052";
+const UNIPILE_BASE_URL     = "https://api20.unipile.com:15052";
 const MAX_VISITS_PER_DAY   = 80;
 const MAX_INVITES_PER_DAY  = 20;
 const MAX_MESSAGES_PER_DAY = 50;
+const JOBS_PER_USER        = 15; // jobs traités par user par run
+const MAX_PARALLEL_USERS   = 20; // users traités en parallèle par run
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,38 +69,298 @@ serve(async (req) => {
 
   const now = new Date().toISOString();
 
-  const { data: jobs, error: jobsError } = await admin
-    .from("campaign_jobs")
-    .select("*, campaign_leads(*), campaigns(user_id)")
-    .eq("status", "pending")
-    .lte("execute_at", now)
-    .order("execute_at", { ascending: true })
-    .limit(100);
-
-  if (jobsError) return jsonResponse({ error: jobsError.message }, 500);
-  if (!jobs || jobs.length === 0) return jsonResponse({ processed: 0 });
-
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const dailyCounts: Record<string, { visits: number; invites: number; messages: number }> = {};
+  // ── 1. Récupère les users distincts avec des jobs pending ──────────────────
+  const { data: pendingUsers, error: usersError } = await admin
+    .rpc("get_pending_campaign_users");
 
-  async function getDailyCount(userId: string) {
-    if (dailyCounts[userId]) return dailyCounts[userId];
-    const { data } = await admin
+  if (usersError) return jsonResponse({ error: usersError.message }, 500);
+  if (!pendingUsers || pendingUsers.length === 0) return jsonResponse({ processed: 0 });
+
+  const userIds = (pendingUsers as { user_id: string }[])
+    .map((r) => r.user_id)
+    .slice(0, MAX_PARALLEL_USERS);
+  console.log(`[campaign-runner] ${userIds.length} users actifs`);
+
+  // ── 2. Traite chaque user en parallèle ────────────────────────────────────
+  const results = await Promise.all(userIds.map((userId: string) => processUser(userId)));
+
+  const totalProcessed = results.reduce((sum, r) => sum + r, 0);
+  console.log(`[campaign-runner] processed: ${totalProcessed}`);
+  return jsonResponse({ processed: totalProcessed, users: userIds.length });
+
+  // ── Traitement séquentiel des jobs d'un user ──────────────────────────────
+  async function processUser(userId: string): Promise<number> {
+    // Récupère les jobs pending de cet user (séquentiels pour respecter les quotas LinkedIn)
+    const { data: jobs, error: jobsError } = await admin
+      .from("campaign_jobs")
+      .select("*, campaign_leads(*), campaigns(user_id)")
+      .eq("status", "pending")
+      .eq("user_id", userId)
+      .lte("execute_at", now)
+      .order("execute_at", { ascending: true })
+      .limit(JOBS_PER_USER);
+
+    console.log(`[campaign-runner] user ${userId}: ${jobs?.length ?? 0} jobs, error: ${jobsError?.message ?? 'none'}`);
+    if (jobsError || !jobs || jobs.length === 0) return 0;
+
+    // Récupère les compteurs journaliers de cet user
+    const { data: doneToday } = await admin
       .from("campaign_jobs")
       .select("action_type")
       .eq("user_id", userId)
       .eq("status", "done")
       .gte("executed_at", todayStart.toISOString());
+
     const counts = { visits: 0, invites: 0, messages: 0 };
-    for (const j of data ?? []) {
+    for (const j of doneToday ?? []) {
       if (j.action_type === "visit")                counts.visits++;
       else if (j.action_type === "invite")          counts.invites++;
       else if (j.action_type.startsWith("message")) counts.messages++;
     }
-    dailyCounts[userId] = counts;
-    return counts;
+
+    // Récupère le compte Unipile une seule fois pour cet user
+    const { data: unipileAccount } = await admin
+      .from("unipile_accounts")
+      .select("account_id")
+      .eq("user_id", userId)
+      .single();
+
+    if (!unipileAccount) return 0;
+    const accountId = unipileAccount.account_id;
+
+    let processed = 0;
+
+    for (const job of jobs) {
+      const lead = job.campaign_leads;
+
+      if (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   continue;
+      if (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  continue;
+      if (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY) continue;
+
+      await admin.from("campaign_jobs").update({ status: "running" }).eq("id", job.id);
+
+      let success  = false;
+      let errorMsg = "";
+
+      try {
+
+        /* ── VISIT ── */
+        if (job.action_type === "visit") {
+          const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "") ?? lead.provider_id;
+          const res = await unipileRequest(
+            `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}&notify=true`,
+            "GET", apiKey
+          );
+          if (res.ok) {
+            const updateData: Record<string, string> = { status: "visiting" };
+            if (!lead.provider_id && res.data?.provider_id) {
+              updateData.provider_id = res.data.provider_id;
+            }
+            await admin.from("campaign_leads").update(updateData).eq("id", lead.id);
+            success = true;
+            counts.visits++;
+          } else {
+            errorMsg = JSON.stringify(res.data);
+          }
+
+        /* ── INVITE ── */
+        } else if (job.action_type === "invite") {
+          let providerId = lead.provider_id;
+
+          if (!providerId) {
+            const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "");
+            const lookupRes = await unipileRequest(
+              `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}`,
+              "GET", apiKey
+            );
+            if (lookupRes.ok && lookupRes.data?.provider_id) {
+              providerId = lookupRes.data.provider_id;
+              await admin.from("campaign_leads").update({ provider_id: providerId }).eq("id", lead.id);
+            }
+          }
+
+          if (!providerId) {
+            errorMsg = "Missing provider_id for invite";
+          } else {
+            const { data: step } = await admin
+              .from("campaign_steps")
+              .select("message_content")
+              .eq("campaign_id", job.campaign_id)
+              .eq("action_type", "invite")
+              .single();
+
+            const message = step?.message_content
+              ? step.message_content
+                  .replace(/{{first_name}}/g,   lead.first_name   ?? "")
+                  .replace(/{{last_name}}/g,    lead.last_name    ?? "")
+                  .replace(/{{company_name}}/g, lead.company_name ?? "")
+              : undefined;
+
+            const res = await unipileRequest("/api/v1/users/invite", "POST", apiKey, {
+              provider_id: providerId,
+              account_id:  accountId,
+              ...(message ? { message } : {}),
+            });
+
+            if (res.ok) {
+              await admin.from("campaign_leads")
+                .update({ status: "invited", invited_at: now })
+                .eq("id", lead.id);
+              success = true;
+              counts.invites++;
+            } else {
+              errorMsg = JSON.stringify(res.data);
+            }
+          }
+
+        /* ── MESSAGE ── */
+        } else if (job.action_type.startsWith("message")) {
+
+          if (lead.replied_at) {
+            await admin.from("campaign_jobs")
+              .update({ status: "cancelled", executed_at: now })
+              .eq("id", job.id);
+            continue;
+          }
+
+          if (job.action_type === "message_1" && !lead.accepted_at) {
+            let isConnected = false;
+            if (lead.provider_id) {
+              const checkRes = await unipileRequest(
+                `/api/v1/users/${encodeURIComponent(lead.provider_id)}?account_id=${accountId}`,
+                "GET", apiKey
+              );
+              if (checkRes.ok) {
+                isConnected = checkRes.data?.network_distance === "FIRST_DEGREE";
+              }
+            }
+            if (isConnected) {
+              await admin.from("campaign_leads")
+                .update({ accepted_at: now })
+                .eq("id", lead.id);
+              lead.accepted_at = now;
+            } else {
+              const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+              await admin.from("campaign_jobs")
+                .update({ status: "pending", execute_at: tomorrow })
+                .eq("id", job.id);
+              continue;
+            }
+          }
+
+          const msgNum    = parseInt(job.action_type.replace("message_", ""), 10);
+          const stepOrder = msgNum + 2;
+
+          const { data: step } = await admin
+            .from("campaign_steps")
+            .select("message_content")
+            .eq("campaign_id", job.campaign_id)
+            .eq("action_type", "message")
+            .eq("step_order", stepOrder)
+            .single();
+
+          const text = step?.message_content
+            ? step.message_content
+                .replace(/{{first_name}}/g,   lead.first_name   ?? "")
+                .replace(/{{last_name}}/g,    lead.last_name    ?? "")
+                .replace(/{{company_name}}/g, lead.company_name ?? "")
+            : null;
+
+          if (!text) {
+            errorMsg = `Missing message content for step ${stepOrder}`;
+          } else {
+            const fd = new FormData();
+            fd.append("account_id", accountId);
+            fd.append("attendees_ids", lead.provider_id);
+            fd.append("text", text);
+
+            const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/chats`, {
+              method: "POST",
+              headers: { "X-API-KEY": apiKey, "accept": "application/json" },
+              body: fd,
+            });
+            const resData = await res.json().catch(() => ({}));
+
+            if (res.ok) {
+              const chatId: string | null = resData?.id ?? resData?.chat_id ?? null;
+
+              const updateData: Record<string, string> = {
+                status: `messaged_${msgNum}`,
+                [`messaged_${msgNum}_at`]: now,
+              };
+              await admin.from("campaign_leads").update(updateData).eq("id", lead.id);
+
+              if (job.action_type === "message_1") {
+                const { data: existingLead } = await admin
+                  .from("leads")
+                  .select("id, unipile_chat_id")
+                  .eq("owner_id", userId)
+                  .eq("linkedin_url", lead.linkedin_url)
+                  .single();
+
+                let leadId = existingLead?.id;
+                if (!leadId) {
+                  const { data: newLead } = await admin.from("leads").insert({
+                    owner_id:                userId,
+                    first_name:              lead.first_name,
+                    last_name:               lead.last_name,
+                    company_name:            lead.company_name,
+                    linkedin_url:            lead.linkedin_url,
+                    status:                  "conversation_engagee",
+                    outreach_type:           "message texte",
+                    conversation_started_at: now,
+                    ...(chatId ? { unipile_chat_id: chatId } : {}),
+                  }).select("id").single();
+                  leadId = newLead?.id;
+                } else if (chatId && !existingLead?.unipile_chat_id) {
+                  await admin.from("leads")
+                    .update({ unipile_chat_id: chatId })
+                    .eq("id", leadId);
+                }
+
+                if (leadId) {
+                  await admin.from("lead_events").insert({
+                    lead_id:    leadId,
+                    user_id:    userId,
+                    event_type: "status_changed",
+                    new_value:  "conversation_engagee",
+                  });
+                }
+              }
+
+              success = true;
+              counts.messages++;
+            } else {
+              errorMsg = JSON.stringify(resData);
+            }
+          }
+        }
+
+      } catch (err) {
+        errorMsg = String(err);
+      }
+
+      await admin.from("campaign_jobs").update({
+        status:        success ? "done" : "failed",
+        executed_at:   now,
+        error_message: errorMsg || null,
+      }).eq("id", job.id);
+
+      if (success) {
+        await scheduleNextStep(job, lead);
+      } else {
+        await admin.from("campaign_leads")
+          .update({ error_message: errorMsg })
+          .eq("id", lead.id);
+      }
+
+      processed++;
+    }
+
+    return processed;
   }
 
   async function scheduleNextStep(job: any, lead: any) {
@@ -111,7 +373,6 @@ serve(async (req) => {
       .maybeSingle();
 
     if (!nextStep) {
-      // Séquence terminée → marque le lead comme done
       await admin.from("campaign_leads")
         .update({ status: "completed" })
         .eq("id", lead.id);
@@ -131,263 +392,4 @@ serve(async (req) => {
       execute_at:       executeAt,
     });
   }
-
-  let processed = 0;
-
-  for (const job of jobs) {
-    const lead   = job.campaign_leads;
-    const userId = job.user_id;
-    const counts = await getDailyCount(userId);
-
-    if (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   continue;
-    if (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  continue;
-    if (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY) continue;
-
-    await admin.from("campaign_jobs").update({ status: "running" }).eq("id", job.id);
-
-    const { data: unipileAccount } = await admin
-      .from("unipile_accounts")
-      .select("account_id")
-      .eq("user_id", userId)
-      .single();
-
-    if (!unipileAccount) {
-      await admin.from("campaign_jobs").update({
-        status: "failed",
-        error_message: "No Unipile account",
-        executed_at: now,
-      }).eq("id", job.id);
-      continue;
-    }
-
-    const accountId = unipileAccount.account_id;
-    let success  = false;
-    let errorMsg = "";
-
-    try {
-
-      /* ── VISIT ── */
-      if (job.action_type === "visit") {
-        const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "") ?? lead.provider_id;
-        const res = await unipileRequest(
-          `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}&notify=true`,
-          "GET", apiKey
-        );
-        if (res.ok) {
-          const updateData: Record<string, string> = { status: "visiting" };
-          if (!lead.provider_id && res.data?.provider_id) {
-            updateData.provider_id = res.data.provider_id;
-          }
-          await admin.from("campaign_leads").update(updateData).eq("id", lead.id);
-          success = true;
-          counts.visits++;
-        } else {
-          errorMsg = JSON.stringify(res.data);
-        }
-
-      /* ── INVITE ── */
-      } else if (job.action_type === "invite") {
-        let providerId = lead.provider_id;
-
-        if (!providerId) {
-          const slug = lead.linkedin_url.split("/in/")[1]?.replace(/\/$/, "");
-          const lookupRes = await unipileRequest(
-            `/api/v1/users/${encodeURIComponent(slug)}?account_id=${accountId}`,
-            "GET", apiKey
-          );
-          if (lookupRes.ok && lookupRes.data?.provider_id) {
-            providerId = lookupRes.data.provider_id;
-            await admin.from("campaign_leads").update({ provider_id: providerId }).eq("id", lead.id);
-          }
-        }
-
-        if (!providerId) {
-          errorMsg = "Missing provider_id for invite";
-        } else {
-          const { data: step } = await admin
-            .from("campaign_steps")
-            .select("message_content")
-            .eq("campaign_id", job.campaign_id)
-            .eq("action_type", "invite")
-            .single();
-
-          const message = step?.message_content
-            ? step.message_content
-                .replace(/{{first_name}}/g,   lead.first_name   ?? "")
-                .replace(/{{last_name}}/g,    lead.last_name    ?? "")
-                .replace(/{{company_name}}/g, lead.company_name ?? "")
-            : undefined;
-
-          const res = await unipileRequest("/api/v1/users/invite", "POST", apiKey, {
-            provider_id: providerId,
-            account_id:  accountId,
-            ...(message ? { message } : {}),
-          });
-
-          if (res.ok) {
-            await admin.from("campaign_leads")
-              .update({ status: "invited", invited_at: now })
-              .eq("id", lead.id);
-            success = true;
-            counts.invites++;
-          } else {
-            errorMsg = JSON.stringify(res.data);
-          }
-        }
-
-      /* ── MESSAGE ── */
-      } else if (job.action_type.startsWith("message")) {
-
-        // Si le lead a déjà répondu, on annule le job sans envoyer
-        if (lead.replied_at) {
-          await admin.from("campaign_jobs")
-            .update({ status: "cancelled", executed_at: now })
-            .eq("id", job.id);
-          continue;
-        }
-
-        // message_1 : vérifie que la connexion est acceptée
-        if (job.action_type === "message_1" && !lead.accepted_at) {
-          let isConnected = false;
-          if (lead.provider_id) {
-            const checkRes = await unipileRequest(
-              `/api/v1/users/${encodeURIComponent(lead.provider_id)}?account_id=${accountId}`,
-              "GET", apiKey
-            );
-            if (checkRes.ok) {
-              console.log("[check-connection]", JSON.stringify(checkRes.data));
-              isConnected = checkRes.data?.network_distance === "FIRST_DEGREE";
-            }
-          }
-          if (isConnected) {
-            await admin.from("campaign_leads")
-              .update({ accepted_at: now })
-              .eq("id", lead.id);
-            lead.accepted_at = now;
-          } else {
-            const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-            await admin.from("campaign_jobs")
-              .update({ status: "pending", execute_at: tomorrow })
-              .eq("id", job.id);
-            continue;
-          }
-        }
-
-        const msgNum    = parseInt(job.action_type.replace("message_", ""), 10);
-        const stepOrder = msgNum + 2;
-
-        const { data: step } = await admin
-          .from("campaign_steps")
-          .select("message_content")
-          .eq("campaign_id", job.campaign_id)
-          .eq("action_type", "message")
-          .eq("step_order", stepOrder)
-          .single();
-
-        const text = step?.message_content
-          ? step.message_content
-              .replace(/{{first_name}}/g,   lead.first_name   ?? "")
-              .replace(/{{last_name}}/g,    lead.last_name    ?? "")
-              .replace(/{{company_name}}/g, lead.company_name ?? "")
-          : null;
-
-        if (!text) {
-          errorMsg = `Missing message content for step ${stepOrder}`;
-        } else {
-          // Envoie le message via POST /chats (crée ou retrouve le chat + envoie en une requête)
-          const fd = new FormData();
-          fd.append("account_id", accountId);
-          fd.append("attendees_ids", lead.provider_id);
-          fd.append("text", text);
-
-          const res = await fetch(
-            `${UNIPILE_BASE_URL}/api/v1/chats`,
-            {
-              method: "POST",
-              headers: { "X-API-KEY": apiKey, "accept": "application/json" },
-              body: fd,
-            }
-          );
-          const resData = await res.json().catch(() => ({}));
-          console.log("[send-message]", JSON.stringify(resData));
-
-          if (res.ok) {
-            const chatId: string | null = resData?.id ?? resData?.chat_id ?? null;
-
-            const updateData: Record<string, string> = {
-              status: `messaged_${msgNum}`,
-              [`messaged_${msgNum}_at`]: now,
-            };
-            await admin.from("campaign_leads").update(updateData).eq("id", lead.id);
-
-            // Crée / lie le lead dans la table leads au premier message
-            if (job.action_type === "message_1") {
-              const { data: existingLead } = await admin
-                .from("leads")
-                .select("id, unipile_chat_id")
-                .eq("owner_id", userId)
-                .eq("linkedin_url", lead.linkedin_url)
-                .single();
-
-              let leadId = existingLead?.id;
-              if (!leadId) {
-                const { data: newLead } = await admin.from("leads").insert({
-                  owner_id:                userId,
-                  first_name:              lead.first_name,
-                  last_name:               lead.last_name,
-                  company_name:            lead.company_name,
-                  linkedin_url:            lead.linkedin_url,
-                  status:                  "conversation_engagee",
-                  outreach_type:           "message texte",
-                  conversation_started_at: now,
-                  ...(chatId ? { unipile_chat_id: chatId } : {}),
-                }).select("id").single();
-                leadId = newLead?.id;
-              } else if (chatId && !existingLead?.unipile_chat_id) {
-                // Met à jour le chat_id si le lead existait déjà sans chat_id
-                await admin.from("leads")
-                  .update({ unipile_chat_id: chatId })
-                  .eq("id", leadId);
-              }
-
-              if (leadId) {
-                await admin.from("lead_events").insert({
-                  lead_id:    leadId,
-                  user_id:    userId,
-                  event_type: "status_changed",
-                  new_value:  "conversation_engagee",
-                });
-              }
-            }
-
-            success = true;
-            counts.messages++;
-          } else {
-            errorMsg = JSON.stringify(resData);
-          }
-        }
-      }
-
-    } catch (err) {
-      errorMsg = String(err);
-    }
-
-    await admin.from("campaign_jobs").update({
-      status:        success ? "done" : "failed",
-      executed_at:   now,
-      error_message: errorMsg || null,
-    }).eq("id", job.id);
-
-    if (success) {
-      await scheduleNextStep(job, lead);
-    } else {
-      await admin.from("campaign_leads")
-        .update({ error_message: errorMsg })
-        .eq("id", lead.id);
-    }
-
-    processed++;
-  }
-
-  return jsonResponse({ processed });
 });

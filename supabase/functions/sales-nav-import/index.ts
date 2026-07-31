@@ -102,7 +102,8 @@ serve(async (req) => {
         const pageItems: any[] = page?.items ?? [];
         items.push(...pageItems);
 
-        cursor = page?.paging?.next_cursor ?? null;
+        console.log(`[sales-nav-import] page items: ${pageItems.length}, paging:`, JSON.stringify(page?.paging ?? null));
+        cursor = page?.paging?.next_cursor ?? page?.paging?.cursor ?? page?.cursor ?? null;
         if (!cursor || pageItems.length < pageLimit) {
           nextCursor = null;
           break;

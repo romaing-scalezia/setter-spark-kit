@@ -119,7 +119,7 @@ export default function Leads() {
   const { data: allLeads = [], isLoading } = useQuery({
     queryKey: ['leads'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('leads').select('*').eq('owner_id', user!.id).order('created_at', { ascending: false });
       if (error) throw error;
       return data as Lead[];
     },
