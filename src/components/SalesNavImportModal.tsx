@@ -52,16 +52,21 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
   const { toast } = useToast();
 
   const [url, setUrl]               = useState('');
-  const [loading, setLoading]       = useState(false);
-  const [prospects, setProspects]   = useState<Prospect[]>([]);
-  const [summary, setSummary]       = useState<Summary | null>(null);
-  const [selected, setSelected]     = useState<Set<string>>(new Set());
+  const [loading, setLoading]         = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [prospects, setProspects]     = useState<Prospect[]>([]);
+  const [summary, setSummary]         = useState<Summary | null>(null);
+  const [selected, setSelected]       = useState<Set<string>>(new Set());
+  const [nextCursor, setNextCursor]   = useState<string | null>(null);
+  const [currentUrl, setCurrentUrl]   = useState<string>('');
 
   const reset = () => {
     setUrl('');
     setProspects([]);
     setSummary(null);
     setSelected(new Set());
+    setNextCursor(null);
+    setCurrentUrl('');
   };
 
   const handleClose = () => {
@@ -79,7 +84,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
 
     try {
       const { data, error } = await supabase.functions.invoke('sales-nav-import', {
-        body: { action: 'preview', url: url.trim(), limit: 100 },
+        body: { action: 'preview', url: url.trim(), limit: 2500 },
       });
 
       if (error) throw error;
@@ -88,6 +93,8 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
       const prv: Prospect[] = data.prospects ?? [];
       setProspects(prv);
       setSummary(data.summary);
+      setNextCursor(data.next_cursor ?? null);
+      setCurrentUrl(url.trim());
 
       // Pré-sélectionne tous les "new"
       const newIds = prv
@@ -98,6 +105,42 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
       toast({ title: 'Erreur', description: err.message ?? 'Impossible de récupérer les prospects', variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Load more ────────────────────────────────────────────────
+  const handleLoadMore = async () => {
+    if (!nextCursor || !currentUrl) return;
+    setLoadingMore(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sales-nav-import', {
+        body: { action: 'preview', url: currentUrl, limit: 2500, cursor: nextCursor },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const more: Prospect[] = data.prospects ?? [];
+      setProspects((prev) => [...prev, ...more]);
+      setNextCursor(data.next_cursor ?? null);
+
+      // Pré-sélectionne les nouveaux "new"
+      const newIds = more
+        .filter((p) => p.status === 'new' && p.linkedin_url)
+        .map((p) => p.linkedin_url!);
+      setSelected((prev) => new Set([...prev, ...newIds]));
+
+      // Met à jour le summary
+      setSummary((prev) => prev ? {
+        total:       prev.total + (data.summary?.total ?? 0),
+        new:         prev.new + (data.summary?.new ?? 0),
+        in_crm:      prev.in_crm + (data.summary?.in_crm ?? 0),
+        in_campaign: prev.in_campaign + (data.summary?.in_campaign ?? 0),
+      } : data.summary);
+    } catch (err: any) {
+      toast({ title: 'Erreur', description: err.message ?? 'Impossible de charger plus', variant: 'destructive' });
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -290,6 +333,21 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
                 </TableBody>
               </Table>
             </div>
+
+            {nextCursor && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Chargement...</>
+                  : 'Charger plus de prospects'
+                }
+              </Button>
+            )}
 
             {summary && summary.in_campaign > 0 && (
               <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">

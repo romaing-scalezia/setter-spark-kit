@@ -49,7 +49,7 @@ serve(async (req) => {
     });
 
     const body = await req.json();
-    const { action, url, limit = 100 } = body;
+    const { action, url, limit = 2500, cursor: startCursor = null } = body;
 
     // ── Action : preview — récupère les prospects depuis Unipile ──────────────
     if (action === "preview") {
@@ -67,25 +67,51 @@ serve(async (req) => {
         return jsonResponse({ error: "no_linkedin_account" }, 400);
       }
 
-      // Appel Unipile search avec l'URL Sales Nav
-      const searchRes = await fetch(`${UNIPILE_BASE_URL}/api/v1/linkedin/search?account_id=${account.account_id}&limit=${Math.min(limit, 100)}`, {
-        method: "POST",
-        headers: {
-          "X-API-KEY": unipileKey,
-          "accept": "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ url }),
-      });
+      // Pagination Unipile : max 100 par page, on boucle jusqu'à 2500 ou fin de liste
+      // startCursor permet de reprendre là où on s'est arrêté (bouton "Charger plus")
+      const maxResults = Math.min(limit, 2500);
+      const items: any[] = [];
+      let cursor: string | null = startCursor;
+      let nextCursor: string | null = null;
 
-      if (!searchRes.ok) {
-        const err = await searchRes.text();
-        console.error("[sales-nav-import] Unipile search error:", err);
-        return jsonResponse({ error: "unipile_error", details: err }, 400);
+      while (items.length < maxResults) {
+        const pageLimit = Math.min(100, maxResults - items.length);
+        const qs = new URLSearchParams({
+          account_id: account.account_id,
+          limit:      String(pageLimit),
+          ...(cursor ? { cursor } : {}),
+        });
+
+        const searchRes = await fetch(`${UNIPILE_BASE_URL}/api/v1/linkedin/search?${qs}`, {
+          method: "POST",
+          headers: {
+            "X-API-KEY": unipileKey,
+            "accept":     "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ url }),
+        });
+
+        if (!searchRes.ok) {
+          const err = await searchRes.text();
+          console.error("[sales-nav-import] Unipile search error:", err);
+          return jsonResponse({ error: "unipile_error", details: err }, 400);
+        }
+
+        const page = await searchRes.json();
+        const pageItems: any[] = page?.items ?? [];
+        items.push(...pageItems);
+
+        cursor = page?.paging?.next_cursor ?? null;
+        if (!cursor || pageItems.length < pageLimit) {
+          nextCursor = null;
+          break;
+        }
+        nextCursor = cursor; // il reste des résultats après cette batch
       }
 
-      const searchData = await searchRes.json();
-      const items: any[] = searchData?.items ?? [];
+      if (items.length > 0) console.log("[sales-nav-import] raw item[0]:", JSON.stringify(items[0]));
+      console.log(`[sales-nav-import] fetched: ${items.length}, has_more: ${!!nextCursor}`);
 
       // Normalise les profils
       const prospects = items.map((item: any) => ({
@@ -93,11 +119,11 @@ serve(async (req) => {
         first_name:   cleanName(item.first_name ?? item.firstName),
         last_name:    cleanName(item.last_name ?? item.lastName),
         headline:     item.headline ?? item.occupation ?? null,
-        company_name: item.company_name ?? item.current_company?.name ?? null,
-        job_title:    item.job_title ?? item.headline ?? null,
-        linkedin_url: item.linkedin_url ?? item.public_identifier
+        company_name: item.company_name ?? item.current_company?.name ?? item.current_positions?.[0]?.company ?? null,
+        job_title:    item.job_title ?? item.current_positions?.[0]?.role ?? item.headline ?? null,
+        linkedin_url: item.public_profile_url ?? (item.public_identifier
           ? `https://www.linkedin.com/in/${item.public_identifier}/`
-          : null,
+          : null),
         location:     item.location ?? null,
       }));
 
@@ -113,8 +139,9 @@ serve(async (req) => {
           .in("linkedin_url", linkedinUrls),
         admin.from("campaign_leads" as any)
           .select("linkedin_url")
+          .eq("user_id", user.id)
           .in("linkedin_url", linkedinUrls)
-          .not("status", "in", '("completed","cancelled")'),
+          .not("status", "in", "(completed,cancelled)"),
       ]);
 
       const inCrm      = new Set((existingLeads.data ?? []).map((l: any) => l.linkedin_url));
@@ -134,10 +161,10 @@ serve(async (req) => {
         new:         enriched.filter((p) => p.status === "new").length,
         in_crm:      enriched.filter((p) => p.status === "in_crm").length,
         in_campaign: enriched.filter((p) => p.status === "in_campaign").length,
-        paging:      searchData?.paging ?? null,
+        paging:      null,
       };
 
-      return jsonResponse({ prospects: enriched, summary });
+      return jsonResponse({ prospects: enriched, summary, next_cursor: nextCursor });
     }
 
     // ── Action : confirm — vérifie le quota et le réserve ───────────────────
