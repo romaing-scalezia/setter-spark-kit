@@ -5,8 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Navigate, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { KpiCard } from '@/components/KpiCard';
-import { ConversionRates, MiniFunnel } from '@/components/ConversionRates';
-import { getDefaultDateRange, type DateRange } from '@/components/DateRangeFilter';
+import { ConversionRates } from '@/components/ConversionRates';
+import { DateRangeFilter, getDefaultDateRange, type DateRange } from '@/components/DateRangeFilter';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -150,7 +150,9 @@ export default function Dashboard() {
 
   // Filter deals based on outreach-filtered leads
   const filteredLeadIds = useMemo(() => new Set(filteredLeads.map((l) => l.id)), [filteredLeads]);
-  const filteredDeals = useMemo(() => deals.filter((d: any) => filteredLeadIds.has(d.lead_id)), [deals, filteredLeadIds]);
+  const filteredDeals = useMemo(() => deals.filter((d: any) =>
+    filteredLeadIds.has(d.lead_id) && inPeriod(d.created_at)
+  ), [deals, filteredLeadIds, dateRange]);
   const totalRevenue = filteredDeals.filter((d: any) => d.status === 'won').reduce((s: number, d: any) => s + Number(d.amount), 0);
   const wonLeads = filteredLeads.filter((l) => l.status === 'ferme_gagne' && !deals.find((d: any) => d.lead_id === l.id));
 
@@ -273,6 +275,10 @@ export default function Dashboard() {
         )}
 
         {/* KPIs */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Performance CRM</h2>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+        </div>
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
           <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} className="border-primary/30" />
           <KpiCard title="Réponses" value={respondedCount} icon={<Reply className="h-4 w-4" />} className="border-primary/30" />
@@ -288,12 +294,6 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="space-y-4">
               <ConversionRates
-                conversations={contactedCount}
-                responses={respondedCount}
-                callsProposed={callProposedCount}
-                meetingsBooked={rdvBookedCount}
-              />
-              <MiniFunnel
                 conversations={contactedCount}
                 responses={respondedCount}
                 callsProposed={callProposedCount}

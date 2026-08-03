@@ -596,9 +596,9 @@ export default function CampaignNew() {
           <div className="space-y-1 text-muted-foreground">
             <p className="font-medium text-foreground">Quotas LinkedIn appliqués automatiquement</p>
             <ul className="space-y-0.5 text-xs">
-              <li>· <span className="font-medium text-foreground">80 visites</span> de profil / jour</li>
-              <li>· <span className="font-medium text-foreground">20 invitations</span> / jour (≈ 140/semaine)</li>
-              <li>· <span className="font-medium text-foreground">50 messages</span> / jour</li>
+              <li>· <span className="font-medium text-foreground">20 visites</span> de profil / jour</li>
+              <li>· <span className="font-medium text-foreground">20 invitations</span> / jour</li>
+              <li>· <span className="font-medium text-foreground">20 messages</span> / jour</li>
             </ul>
             <p className="text-xs">Les actions en attente reprennent automatiquement le lendemain si le quota est atteint.</p>
           </div>
