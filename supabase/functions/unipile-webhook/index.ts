@@ -51,6 +51,8 @@ serve(async (req) => {
     const name: string | undefined = (payload as any)?.name;
     const status: string | undefined = accountStatus?.message ?? (payload as any)?.status;
     const event: string | undefined = (payload as any)?.event;
+    // Sales Nav détecté directement depuis le payload Unipile
+    const productIsSalesNav = (payload as any)?.Product === "sales_navigator";
 
     const eventType = status ?? event ?? "";
 
@@ -99,31 +101,36 @@ serve(async (req) => {
       // ── Détection Sales Navigator ──
       if (userId) {
         try {
-          const unipileUrl = Deno.env.get("UNIPILE_URL");
-          const unipileKey = Deno.env.get("UNIPILE_API_KEY");
-          if (unipileUrl && unipileKey) {
-            const meRes = await fetch(`${unipileUrl}/api/v1/users/me?account_id=${account_id}`, {
-              headers: { "X-API-KEY": unipileKey, "accept": "application/json" },
-            });
-            if (meRes.ok) {
-              const meData = await meRes.json();
-              // Sales Nav détecté si premium_subscriber ou sales_navigator présent dans le profil
-              const hasSalesNav = !!(
-                meData?.sales_navigator ||
-                meData?.premium_subscriber === true ||
-                meData?.subscriptions?.some((s: any) =>
-                  typeof s === "string"
-                    ? s.toLowerCase().includes("sales")
-                    : s?.type?.toLowerCase?.()?.includes("sales")
-                )
-              );
-              await admin
-                .from("profiles")
-                .update({ has_sales_nav: hasSalesNav, sales_nav_checked_at: new Date().toISOString() })
-                .eq("id", userId);
-              console.log(`[unipile-webhook] has_sales_nav=${hasSalesNav} for user ${userId}`);
+          let hasSalesNav = productIsSalesNav;
+
+          // Si le payload ne le précise pas, on appelle l'API Unipile pour vérifier
+          if (!hasSalesNav) {
+            const unipileUrl = Deno.env.get("UNIPILE_URL");
+            const unipileKey = Deno.env.get("UNIPILE_API_KEY");
+            if (unipileUrl && unipileKey) {
+              const meRes = await fetch(`${unipileUrl}/api/v1/users/me?account_id=${account_id}`, {
+                headers: { "X-API-KEY": unipileKey, "accept": "application/json" },
+              });
+              if (meRes.ok) {
+                const meData = await meRes.json();
+                hasSalesNav = !!(
+                  meData?.sales_navigator ||
+                  meData?.premium_subscriber === true ||
+                  meData?.subscriptions?.some((s: any) =>
+                    typeof s === "string"
+                      ? s.toLowerCase().includes("sales")
+                      : s?.type?.toLowerCase?.()?.includes("sales")
+                  )
+                );
+              }
             }
           }
+
+          await admin
+            .from("profiles")
+            .update({ has_sales_nav: hasSalesNav, sales_nav_checked_at: new Date().toISOString() })
+            .eq("id", userId);
+          console.log(`[unipile-webhook] has_sales_nav=${hasSalesNav} for user ${userId} (source: ${productIsSalesNav ? 'payload' : 'api'})`);
         } catch (err) {
           console.error("[unipile-webhook] sales nav check error:", err);
         }

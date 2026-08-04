@@ -89,6 +89,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           product_tour_seen: (profileRes.data as any).product_tour_seen ?? false,
         });
         setHasSalesNav((profileRes.data as any).has_sales_nav ?? false);
+
+        // Identifie l'utilisateur dans Crisp
+        if (typeof window !== 'undefined' && (window as any).$crisp) {
+          const crisp = (window as any).$crisp;
+          const email = profileRes.data.email;
+          if (email) crisp.push(['set', 'user:email', [email]]);
+          if (profileRes.data.full_name) crisp.push(['set', 'user:nickname', [profileRes.data.full_name]]);
+        }
       }
 
       let membership = membershipRes?.data;
