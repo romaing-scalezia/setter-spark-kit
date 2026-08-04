@@ -5,8 +5,7 @@ const UNIPILE_BASE_URL     = "https://api20.unipile.com:15052";
 const MAX_VISITS_PER_DAY   = 20;
 const MAX_INVITES_PER_DAY  = 20;
 const MAX_MESSAGES_PER_DAY = 20;
-const JOBS_PER_USER        = 3; // jobs traités par user par run (délai 20-45s entre chaque → ~2min max)
-const MAX_PARALLEL_USERS   = 20; // users traités en parallèle par run
+const MAX_PARALLEL_USERS   = 20;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -130,8 +129,7 @@ serve(async (req) => {
       .eq("user_id", userId)
       .lte("execute_at", now)
       .in("action_type", availableTypes)
-      .order("execute_at", { ascending: true })
-      .limit(JOBS_PER_USER);
+      .order("execute_at", { ascending: true });
 
     console.log(`[campaign-runner] user ${userId}: ${jobs?.length ?? 0} jobs, error: ${jobsError?.message ?? 'none'}`);
     if (jobsError || !jobs || jobs.length === 0) return 0;
@@ -157,8 +155,9 @@ serve(async (req) => {
 
       await admin.from("campaign_jobs").update({ status: "running" }).eq("id", job.id);
 
-      let success  = false;
-      let errorMsg = "";
+      let success     = false;
+      let errorMsg    = "";
+      let retryable   = false; // 422/429 LinkedIn → replanifier au lendemain
 
       try {
 
@@ -178,6 +177,7 @@ serve(async (req) => {
             success = true;
             counts.visits++;
           } else {
+            retryable = res.status === 422 || res.status === 429;
             errorMsg = JSON.stringify(res.data);
           }
 
@@ -227,6 +227,7 @@ serve(async (req) => {
               success = true;
               counts.invites++;
             } else {
+              retryable = res.status === 422 || res.status === 429;
               errorMsg = JSON.stringify(res.data);
             }
           }
@@ -349,6 +350,7 @@ serve(async (req) => {
               success = true;
               counts.messages++;
             } else {
+              retryable = res.status === 422 || res.status === 429;
               errorMsg = JSON.stringify(resData);
             }
           }
@@ -358,27 +360,34 @@ serve(async (req) => {
         errorMsg = String(err);
       }
 
-      await admin.from("campaign_jobs").update({
-        status:        success ? "done" : "failed",
-        executed_at:   now,
-        error_message: errorMsg || null,
-      }).eq("id", job.id);
-
       if (success) {
+        await admin.from("campaign_jobs").update({
+          status:        "done",
+          executed_at:   now,
+          error_message: null,
+        }).eq("id", job.id);
         await scheduleNextStep(job, lead);
+      } else if (retryable) {
+        // 422/429 LinkedIn → replanifie au lendemain dans la fenêtre 8h-20h
+        const retryAt = scheduleInWorkingHours(1);
+        await admin.from("campaign_jobs").update({
+          status:        "pending",
+          execute_at:    retryAt,
+          error_message: `retryable: ${errorMsg}`,
+        }).eq("id", job.id);
+        console.log(`[campaign-runner] job ${job.id} retryable (${job.action_type}), rescheduled to ${retryAt}`);
       } else {
+        await admin.from("campaign_jobs").update({
+          status:        "failed",
+          executed_at:   now,
+          error_message: errorMsg || null,
+        }).eq("id", job.id);
         await admin.from("campaign_leads")
           .update({ error_message: errorMsg })
           .eq("id", lead.id);
       }
 
       processed++;
-
-      // Délai aléatoire entre chaque action pour éviter la détection LinkedIn (20-45s)
-      if (processed < jobs.length) {
-        const delay = 20000 + Math.floor(Math.random() * 25000);
-        await new Promise((r) => setTimeout(r, delay));
-      }
     }
 
     return processed;
@@ -402,8 +411,6 @@ serve(async (req) => {
     const WORK_END   = 20 * 60; // 20h00
     const randomMinute = WORK_START + Math.floor(Math.random() * (WORK_END - WORK_START));
 
-    // Applique cette heure au jour cible (en UTC, en tenant compte du décalage Paris +1 ou +2)
-    const offsetMinutes = new Date().getTimezoneOffset(); // toujours 0 en Deno (UTC)
     const parisOffset = target.toLocaleString("en-US", { timeZone: "Europe/Paris", timeZoneName: "short" })
       .includes("GMT+2") ? 2 : 1;
 

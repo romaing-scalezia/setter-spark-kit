@@ -73,7 +73,7 @@ export function BillingContent() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
-              <p className="text-lg font-semibold">{PLAN_LABELS[plan] ?? plan}</p>
+              <p className="text-lg font-semibold">{isTrialing ? 'Période d\'essai' : (PLAN_LABELS[plan] ?? plan)}</p>
               <p className="text-sm text-muted-foreground">
                 {isTrialing
                   ? `${trialDaysLeft} jour${trialDaysLeft > 1 ? 's' : ''} d'essai restant${trialDaysLeft > 1 ? 's' : ''}`
