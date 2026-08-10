@@ -330,6 +330,19 @@ export default function AdminPage() {
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
   });
 
+  const checkSalesNav = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('check-sales-nav');
+      if (error) throw error;
+      return data as { checked: number; updated: number; errors: number };
+    },
+    onSuccess: (data) => {
+      toast({ title: `Sales Nav vérifié — ${data.updated}/${data.checked} mis à jour${data.errors > 0 ? ` (${data.errors} erreurs)` : ''}` });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur check-sales-nav', description: e.message }),
+  });
+
   const CONTENT_TYPE_LABELS: Record<string, string> = {
     script: 'Script', objection: 'Objection', recommendation: 'Reco', coach_note: 'Note coach',
   };
@@ -597,6 +610,12 @@ export default function AdminPage() {
 
           {/* ── Santé système ──────────────────────────────────────── */}
           <TabsContent value="health" className="mt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => checkSalesNav.mutate()} disabled={checkSalesNav.isPending} className="gap-2">
+                {checkSalesNav.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Linkedin className="h-4 w-4 text-[#0A66C2]" />}
+                Vérifier Sales Nav (tous les comptes)
+              </Button>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Card className={failedJobs.length > 0 ? 'border-destructive/40' : 'border-emerald-200'}>
                 <CardHeader className="pb-2">
