@@ -37,6 +37,7 @@ function CoachDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('active');
+  const [assignOpen, setAssignOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -57,6 +58,32 @@ function CoachDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['coach-assignments'] });
       toast({ title: 'Statut élève mis à jour' });
+    },
+    onError: (err: any) => toast({ variant: 'destructive', title: 'Erreur', description: err.message }),
+  });
+
+  const { data: unassignedUsers = [] } = useQuery({
+    queryKey: ['unassigned-users'],
+    queryFn: async () => {
+      const { data } = await (supabase as any).rpc('get_unassigned_users');
+      return (data || []) as { id: string; full_name: string | null; email: string | null }[];
+    },
+    enabled: assignOpen,
+  });
+
+  const assignStudent = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await (supabase as any).from('coach_assignments').insert({
+        coach_id: user!.id,
+        user_id: userId,
+        student_status: 'active',
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['coach-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['unassigned-users'] });
+      toast({ title: 'Élève assigné avec succès' });
     },
     onError: (err: any) => toast({ variant: 'destructive', title: 'Erreur', description: err.message }),
   });
@@ -259,6 +286,9 @@ function CoachDashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle className="text-base">Mes élèves</CardTitle>
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Assigner un élève
+              </Button>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input placeholder="Rechercher..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 w-[200px]" />
@@ -342,6 +372,36 @@ function CoachDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal assignation élève */}
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assigner un élève</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {unassignedUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Aucun utilisateur disponible</p>
+            ) : (
+              unassignedUsers.map((u) => (
+                <div key={u.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">{u.full_name || '—'}</p>
+                    <p className="text-xs text-muted-foreground">{u.email}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={assignStudent.isPending}
+                    onClick={() => assignStudent.mutate(u.id)}
+                  >
+                    Assigner
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
