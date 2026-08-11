@@ -20,7 +20,7 @@ import {
 } from '@/hooks/useUnipileConversations';
 import { useUnipileMessages } from '@/hooks/useUnipileMessages';
 import { LinkLeadDialog } from '@/components/inbox/LinkLeadDialog';
-import { useAttendeeName, getCachedAttendeeName, useAttendeeNamesPrefetch } from '@/hooks/useAttendeeNames';
+import { useAttendeeName, getCachedAttendeeName, useAttendeeNamesPrefetch, useAttendeeProfile } from '@/hooks/useAttendeeNames';
 import { CreateLeadModal } from '@/components/CreateLeadModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
@@ -312,9 +312,10 @@ export default function Inbox() {
     firstName: attendeeFirstName,
     lastName: attendeeLastName,
     linkedinUrl: attendeeLinkedinUrl,
-    companyName: attendeeCompanyName,
-    jobTitle: attendeeJobTitle,
   } = useAttendeeName(selectedAttendeeId);
+  // Only fetched when the "Nouveau lead" modal is actually open — chat_attendees
+  // doesn't carry company/role, so this is a separate, on-demand profile call.
+  const { data: attendeeProfile } = useAttendeeProfile(selectedAttendeeId, account?.account_id, createOpen);
 
   const sortedConvos = useMemo(
     () =>
@@ -918,8 +919,8 @@ export default function Inbox() {
             first_name: attendeeFirstName,
             last_name: attendeeLastName,
             linkedin_url: attendeeLinkedinUrl,
-            company_name: attendeeCompanyName,
-            job_title: attendeeJobTitle,
+            company_name: attendeeProfile?.company_name ?? null,
+            job_title: attendeeProfile?.job_title ?? null,
           }}
           onSubmit={async (data) => {
             if (!user) return;

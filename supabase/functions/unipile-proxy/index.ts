@@ -174,6 +174,21 @@ serve(async (req) => {
         );
       }
 
+      // Richer LinkedIn profile lookup (headline, current position/company) —
+      // chat_attendees only carries name/picture, not work info.
+      case "get_profile": {
+        const { identifier, account_id } = body;
+        if (!identifier || !account_id) {
+          return jsonResponse({ error: "Missing 'identifier' or 'account_id'" }, 400);
+        }
+        const qs = new URLSearchParams({ account_id });
+        return await unipileJson(
+          `/api/v1/users/${encodeURIComponent(identifier)}?${qs.toString()}`,
+          { method: "GET" },
+          apiKey,
+        );
+      }
+
       case "get_messages": {
         const { chat_id } = body;
         if (!chat_id) {
