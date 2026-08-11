@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ExternalLink, CheckCircle2, Clock, AlarmClockOff, Eye, Loader2 } from 'lucide-react';
@@ -26,15 +27,27 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, compact }: TaskCardProps) {
+  const navigate = useNavigate();
   const meta = PRIORITY_META[task.effectivePriority];
   const due = new Date(task.due_date);
   const overdue = isPast(due) && !isToday(due);
   const lead = task.lead;
   const leadName = lead ? `${lead.first_name} ${lead.last_name}` : 'Lead supprimé';
+  const chatId = (lead as any)?.unipile_chat_id as string | null | undefined;
+  const canOpenConversation = !!(chatId || lead?.linkedin_url);
+
+  const openConversation = () => {
+    if (chatId) {
+      navigate(`/inbox?chat=${chatId}`);
+    } else if (lead?.linkedin_url) {
+      window.open(lead.linkedin_url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   return (
     <div
-      className="flex items-center justify-between rounded-md border bg-card p-3 hover:bg-muted/30 transition-colors"
+      className={`flex items-center justify-between rounded-md border bg-card p-3 hover:bg-muted/30 transition-colors ${canOpenConversation ? 'cursor-pointer' : ''}`}
+      onClick={canOpenConversation ? openConversation : undefined}
       data-testid={`task-card-${task.id}`}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -66,29 +79,28 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, c
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        {lead?.linkedin_url && (
+        {canOpenConversation && (
           <Button
-            asChild
             size="sm"
             variant="ghost"
             className="h-8 px-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              openConversation();
+            }}
             data-testid={`task-linkedin-${task.id}`}
           >
-            <a
-              href={lead.linkedin_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <ExternalLink className="h-3.5 w-3.5" />
           </Button>
         )}
         <Button
           size="sm"
           variant="ghost"
           className="h-8 px-2"
-          onClick={() => onOpenLead(task)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenLead(task);
+          }}
           data-testid={`task-open-${task.id}`}
         >
           <Eye className="h-3.5 w-3.5" />
@@ -98,7 +110,10 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, c
             size="sm"
             variant="ghost"
             className="h-8 px-2"
-            onClick={() => onSnooze(task)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSnooze(task);
+            }}
             data-testid={`task-snooze-${task.id}`}
           >
             <AlarmClockOff className="h-3.5 w-3.5" />
@@ -108,7 +123,10 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, c
           size="sm"
           variant="default"
           className="h-8"
-          onClick={() => onComplete(task)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onComplete(task);
+          }}
           disabled={isUpdating}
           data-testid={`task-complete-${task.id}`}
         >
