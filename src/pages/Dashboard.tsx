@@ -108,13 +108,15 @@ export default function Dashboard() {
     onError: (err: any) => toast({ variant: 'destructive', title: 'Erreur', description: err.message }),
   });
 
-  const handleCreateLead = async (data: { first_name: string; last_name: string; linkedin_url: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
+  const handleCreateLead = async (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
     const { data: lead, error } = await supabase.from('leads').insert({
       owner_id: user!.id,
       setter_id: data.setter_id || user!.id,
       first_name: data.first_name,
       last_name: data.last_name,
       linkedin_url: data.linkedin_url || null,
+      company_name: data.company_name || null,
+      job_title: data.job_title || null,
       persona_id: data.persona_id || null,
       outreach_type: (data.outreach_type || null) as any,
       status: 'conversation_engagee' as LeadStatus,
@@ -277,7 +279,7 @@ export default function Dashboard() {
         {/* KPIs */}
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-muted-foreground">Performance CRM</h2>
-          <DateRangeFilter value={dateRange} onChange={setDateRange} />
+          <DateRangeFilter value={dateRange} onChange={setDateRange} triggerClassName="bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground" />
         </div>
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4" data-testid="dashboard-kpi-grid">
           <KpiCard title="Conversations" value={contactedCount} icon={<MessageSquare className="h-4 w-4" />} className="border-primary/30" />

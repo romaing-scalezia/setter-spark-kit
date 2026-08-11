@@ -57,9 +57,10 @@ interface DateRangeFilterProps {
   value: DateRange;
   onChange: (range: DateRange, preset?: PresetKey) => void;
   className?: string;
+  triggerClassName?: string;
 }
 
-export function DateRangeFilter({ value, onChange, className }: DateRangeFilterProps) {
+export function DateRangeFilter({ value, onChange, className, triggerClassName }: DateRangeFilterProps) {
   const [activePreset, setActivePreset] = useState<PresetKey>('this_week');
   const [mode, setMode] = useState<'presets' | 'custom_day' | 'custom_week' | 'custom_month' | 'custom_range'>('presets');
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -120,7 +121,7 @@ export function DateRangeFilter({ value, onChange, className }: DateRangeFilterP
     <div className={cn('flex flex-col gap-2 sm:flex-row sm:items-center', className)}>
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="justify-start gap-2">
+          <Button variant="outline" size="sm" className={cn('justify-start gap-2', triggerClassName)}>
             <CalendarIcon className="h-4 w-4" />
             <span className="text-sm">{PRESET_LABELS[activePreset]}</span>
           </Button>

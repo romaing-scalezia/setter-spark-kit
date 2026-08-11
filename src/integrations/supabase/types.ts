@@ -214,6 +214,7 @@ export type Database = {
           disqualification_reason:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
+          email: string | null
           first_name: string
           first_response_at: string | null
           follow_up_date: string | null
@@ -231,6 +232,7 @@ export type Database = {
             | null
           owner_id: string
           persona_id: string | null
+          phone: string | null
           reason_detail: string | null
           setter_id: string
           source_type: Database["public"]["Enums"]["source_type_enum"] | null
@@ -252,6 +254,7 @@ export type Database = {
           disqualification_reason?:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
+          email?: string | null
           first_name: string
           first_response_at?: string | null
           follow_up_date?: string | null
@@ -269,6 +272,7 @@ export type Database = {
             | null
           owner_id: string
           persona_id?: string | null
+          phone?: string | null
           reason_detail?: string | null
           setter_id?: string
           source_type?: Database["public"]["Enums"]["source_type_enum"] | null
@@ -290,6 +294,7 @@ export type Database = {
           disqualification_reason?:
             | Database["public"]["Enums"]["disqualification_reason_type"]
             | null
+          email?: string | null
           first_name?: string
           first_response_at?: string | null
           follow_up_date?: string | null
@@ -307,6 +312,7 @@ export type Database = {
             | null
           owner_id?: string
           persona_id?: string | null
+          phone?: string | null
           reason_detail?: string | null
           setter_id?: string
           source_type?: Database["public"]["Enums"]["source_type_enum"] | null

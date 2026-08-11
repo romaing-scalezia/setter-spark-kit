@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ExternalLink, Calendar, Building2, Briefcase, Save, Send, Target, Pencil, Trash2, X, Check, CalendarClock, ArrowRightCircle } from 'lucide-react';
+import { ExternalLink, Calendar, Building2, Briefcase, Save, Send, Target, Pencil, Trash2, X, Check, CalendarClock, ArrowRightCircle, Mail, Phone, Trophy } from 'lucide-react';
 import { FollowUpDateModal } from '@/components/FollowUpDateModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -38,6 +38,8 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
 
   const [companyName, setCompanyName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [personaId, setPersonaId] = useState<string>('none');
   const [outreachType, setOutreachType] = useState<string>('none');
   const [setterId, setSetterId] = useState<string>('');
@@ -80,15 +82,34 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
     enabled: !!user && open,
   });
 
+  // Fetch the won deal amount for closed-won leads
+  const { data: wonDeal } = useQuery({
+    queryKey: ['lead-won-deal', lead?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('deals')
+        .select('amount')
+        .eq('lead_id', lead!.id)
+        .eq('status', 'won')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!lead?.id && open && lead?.status === 'ferme_gagne',
+  });
+
   useEffect(() => {
     if (lead) {
       setCompanyName(lead.company_name || '');
       setJobTitle(lead.job_title || '');
+      setEmail(lead.email || '');
+      setPhone(lead.phone || '');
       setPersonaId((lead as any).persona_id || 'none');
       setOutreachType(lead.outreach_type || 'none');
       setSetterId((lead as any).setter_id || lead.owner_id);
     }
-  }, [lead?.id, lead?.company_name, lead?.job_title, (lead as any)?.persona_id, lead?.outreach_type, (lead as any)?.setter_id]);
+  }, [lead?.id, lead?.company_name, lead?.job_title, lead?.email, lead?.phone, (lead as any)?.persona_id, lead?.outreach_type, (lead as any)?.setter_id]);
 
   if (!lead) return null;
 
@@ -100,6 +121,8 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
     if (isOwner) {
       updateData.company_name = companyName || null;
       updateData.job_title = jobTitle || null;
+      updateData.email = email || null;
+      updateData.phone = phone || null;
       updateData.persona_id = personaId !== 'none' ? personaId : null;
       updateData.outreach_type = outreachType !== 'none' ? outreachType : null;
       if (isTeam && setterId) updateData.setter_id = setterId;
@@ -162,6 +185,9 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
   };
 
   const personaName = myPersonas.find((p) => p.id === (lead as any).persona_id)?.name;
+  const dealAmountLabel = wonDeal?.amount != null
+    ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(wonDeal.amount))
+    : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -182,6 +208,16 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
                 <div className="space-y-1">
                   <Label className="text-xs">Poste</Label>
                   <Input value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Titre du poste" className="h-8 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Email</Label>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@exemple.com" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Portable</Label>
+                  <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06 12 34 56 78" className="h-8 text-sm" />
                 </div>
               </div>
               {myPersonas.length > 0 && (
@@ -270,6 +306,8 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
             <div className="space-y-2">
               {lead.company_name && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Building2 className="h-4 w-4" />{lead.company_name}</div>}
               {lead.job_title && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Briefcase className="h-4 w-4" />{lead.job_title}</div>}
+              {lead.email && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Mail className="h-4 w-4" />{lead.email}</div>}
+              {lead.phone && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Phone className="h-4 w-4" />{lead.phone}</div>}
               {personaName && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Target className="h-4 w-4" />{personaName}</div>}
               {isTeam && (lead as any).setter_id && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -292,6 +330,13 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
             <span className="text-sm font-medium text-foreground">Statut :</span>
             <StatusBadge status={lead.status} />
           </div>
+
+          {lead.status === 'ferme_gagne' && dealAmountLabel && (
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+              <Trophy className="h-4 w-4" />
+              <span>Montant du deal : {dealAmountLabel}</span>
+            </div>
+          )}
 
           {lead.follow_up_date && (
             <div className="flex items-center gap-2 text-sm">

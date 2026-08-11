@@ -6,6 +6,8 @@ export interface AttendeeInfo {
   last_name?: string | null;
   profile_picture_url?: string | null;
   linkedin_url?: string | null;
+  company_name?: string | null;
+  job_title?: string | null;
 }
 
 type Status = 'loading' | 'loaded' | 'error';
@@ -45,6 +47,21 @@ function pickName(data: any): AttendeeInfo {
   const linkedin_url =
     (publicId ? `https://www.linkedin.com/in/${publicId}/` : null) ??
     explicitUrl;
+  // Best-effort: Unipile doesn't guarantee company/role on the chat_attendees
+  // endpoint (richer profile data lives behind a separate API call), so this
+  // mirrors the same fallback chain used for Sales Navigator imports and
+  // simply leaves the fields blank (user fills manually) if absent.
+  const company_name =
+    data?.company_name ??
+    data?.current_company?.name ??
+    data?.current_positions?.[0]?.company ??
+    null;
+  const job_title =
+    data?.job_title ??
+    data?.current_positions?.[0]?.role ??
+    data?.headline ??
+    data?.occupation ??
+    null;
   // Fallback: split `name` if first/last absent
   if (!first && !last && typeof data?.name === 'string') {
     const parts = data.name.trim().split(/\s+/);
@@ -53,9 +70,11 @@ function pickName(data: any): AttendeeInfo {
       last_name: parts.slice(1).join(' ') || null,
       profile_picture_url: pic,
       linkedin_url,
+      company_name,
+      job_title,
     };
   }
-  return { first_name: first, last_name: last, profile_picture_url: pic, linkedin_url };
+  return { first_name: first, last_name: last, profile_picture_url: pic, linkedin_url, company_name, job_title };
 }
 
 async function fetchAttendee(attendeeId: string) {
@@ -95,6 +114,8 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
   firstName: string | null;
   lastName: string | null;
   linkedinUrl: string | null;
+  companyName: string | null;
+  jobTitle: string | null;
   loading: boolean;
 } {
   const [, setTick] = useState(0);
@@ -115,17 +136,17 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
   }, [attendeeId]);
 
   if (!attendeeId) {
-    return { name: '—', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: false };
+    return { name: '—', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, companyName: null, jobTitle: null, loading: false };
   }
 
   const entry = cache.get(attendeeId);
   if (!entry || entry.status === 'loading') {
-    return { name: '…', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: true };
+    return { name: '…', avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, companyName: null, jobTitle: null, loading: true };
   }
   if (entry.status === 'error' || !entry.info) {
-    return { name: truncate(attendeeId), avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, loading: false };
+    return { name: truncate(attendeeId), avatarUrl: null, firstName: null, lastName: null, linkedinUrl: null, companyName: null, jobTitle: null, loading: false };
   }
-  const { first_name, last_name, profile_picture_url, linkedin_url } = entry.info;
+  const { first_name, last_name, profile_picture_url, linkedin_url, company_name, job_title } = entry.info;
   const name =
     [first_name, last_name].filter(Boolean).join(' ').trim() ||
     truncate(attendeeId);
@@ -135,6 +156,8 @@ export function useAttendeeName(attendeeId: string | null | undefined): {
     firstName: first_name ?? null,
     lastName: last_name ?? null,
     linkedinUrl: linkedin_url ?? null,
+    companyName: company_name ?? null,
+    jobTitle: job_title ?? null,
     loading: false,
   };
 }

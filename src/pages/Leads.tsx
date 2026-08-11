@@ -156,13 +156,15 @@ export default function Leads() {
   };
 
   const createLead = useMutation({
-    mutationFn: async (data: { first_name: string; last_name: string; linkedin_url: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
+    mutationFn: async (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
       const { data: lead, error } = await supabase.from('leads').insert({
         owner_id: user!.id,
         setter_id: data.setter_id || user!.id,
         first_name: data.first_name,
         last_name: data.last_name,
         linkedin_url: data.linkedin_url || null,
+        company_name: data.company_name || null,
+        job_title: data.job_title || null,
         persona_id: data.persona_id || null,
         outreach_type: (data.outreach_type || null) as any,
         status: 'conversation_engagee' as LeadStatus,
@@ -496,7 +498,7 @@ export default function Leads() {
 
   const hasActiveFilters = sectorFilter !== 'all' || typeFilter !== 'all' || sizeFilter !== 'all' || outreachFilter !== 'all' || followUpLevelFilter !== 'all' || lossReasonFilter.size > 0;
 
-  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('kanban');
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
 
   const KANBAN_STATUSES: LeadStatus[] = [

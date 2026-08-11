@@ -312,6 +312,8 @@ export default function Inbox() {
     firstName: attendeeFirstName,
     lastName: attendeeLastName,
     linkedinUrl: attendeeLinkedinUrl,
+    companyName: attendeeCompanyName,
+    jobTitle: attendeeJobTitle,
   } = useAttendeeName(selectedAttendeeId);
 
   const sortedConvos = useMemo(
@@ -916,6 +918,8 @@ export default function Inbox() {
             first_name: attendeeFirstName,
             last_name: attendeeLastName,
             linkedin_url: attendeeLinkedinUrl,
+            company_name: attendeeCompanyName,
+            job_title: attendeeJobTitle,
           }}
           onSubmit={async (data) => {
             if (!user) return;
@@ -926,6 +930,8 @@ export default function Inbox() {
                 first_name: data.first_name,
                 last_name: data.last_name,
                 linkedin_url: data.linkedin_url || null,
+                company_name: data.company_name || null,
+                job_title: data.job_title || null,
                 persona_id: data.persona_id || null,
                 outreach_type: (data.outreach_type || null) as any,
                 status: 'conversation_engagee',

@@ -14,11 +14,13 @@ import type { Persona } from '@/pages/Personas';
 interface CreateLeadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: { first_name: string; last_name: string; linkedin_url: string; persona_id: string | null; outreach_type: string | null; setter_id: string | null }) => Promise<void>;
+  onSubmit: (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; persona_id: string | null; outreach_type: string | null; setter_id: string | null }) => Promise<void>;
   initialValues?: {
     first_name?: string | null;
     last_name?: string | null;
     linkedin_url?: string | null;
+    company_name?: string | null;
+    job_title?: string | null;
   };
 }
 
@@ -35,6 +37,8 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
   const [personaId, setPersonaId] = useState('none');
   const [outreachType, setOutreachType] = useState('message_texte');
   const [setterId, setSetterId] = useState<string>('');
@@ -49,8 +53,10 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
       setFirstName(initialValues?.first_name ?? '');
       setLastName(initialValues?.last_name ?? '');
       setLinkedinUrl(initialValues?.linkedin_url ?? '');
+      setCompanyName(initialValues?.company_name ?? '');
+      setJobTitle(initialValues?.job_title ?? '');
     }
-  }, [open, initialValues?.first_name, initialValues?.last_name, initialValues?.linkedin_url]);
+  }, [open, initialValues?.first_name, initialValues?.last_name, initialValues?.linkedin_url, initialValues?.company_name, initialValues?.job_title]);
 
   const { data: myPersonas = [] } = useQuery({
     queryKey: ['create-lead-personas', user?.id],
@@ -76,6 +82,8 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
       first_name: firstName,
       last_name: lastName,
       linkedin_url: linkedinUrl,
+      company_name: companyName,
+      job_title: jobTitle,
       persona_id: personaId !== 'none' ? personaId : null,
       outreach_type: outreachType,
       setter_id: isTeam ? (setterId || user!.id) : null,
@@ -83,6 +91,8 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
     setFirstName('');
     setLastName('');
     setLinkedinUrl('');
+    setCompanyName('');
+    setJobTitle('');
     setPersonaId('none');
     setOutreachType('message_texte');
     setSetterId(user?.id ?? '');
@@ -110,6 +120,16 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
           <div className="space-y-2">
             <Label htmlFor="linkedin">URL LinkedIn</Label>
             <Input id="linkedin" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="https://linkedin.com/in/..." />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="companyName">Entreprise</Label>
+              <Input id="companyName" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Nom entreprise" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="jobTitle">Poste</Label>
+              <Input id="jobTitle" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Titre du poste" />
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Format d'approche *</Label>
