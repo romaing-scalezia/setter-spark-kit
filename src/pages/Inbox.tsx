@@ -27,6 +27,7 @@ import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
 import { StatusBadge } from '@/components/StatusBadge';
 import { StatusDropdown } from '@/components/StatusDropdown';
 import { FollowUpDateModal } from '@/components/FollowUpDateModal';
+import { RdvDateModal } from '@/components/RdvDateModal';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { type Lead, type LeadStatus } from '@/lib/constants';
@@ -251,6 +252,7 @@ export default function Inbox() {
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [followUpDateOpen, setFollowUpDateOpen] = useState(false);
+  const [rdvDateOpen, setRdvDateOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'appel_propose' | 'followup'>('all');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -386,6 +388,10 @@ export default function Inbox() {
     if (!linkedLead) return;
     if (status === 'follow_up') {
       setFollowUpDateOpen(true);
+      return;
+    }
+    if (status === 'rendez_vous_booke') {
+      setRdvDateOpen(true);
       return;
     }
     await (supabase.from('leads') as any).update({ status }).eq('id', linkedLead.id);
@@ -968,6 +974,24 @@ export default function Inbox() {
             .update({ status: 'follow_up', follow_up_date: format(date, 'yyyy-MM-dd') })
             .eq('id', linkedLead.id);
           setFollowUpDateOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+          queryClient.invalidateQueries({ queryKey: ['all-linked-leads'] });
+        }}
+      />
+      <RdvDateModal
+        open={rdvDateOpen}
+        onOpenChange={setRdvDateOpen}
+        onSubmit={async (date) => {
+          if (!linkedLead) return;
+          await (supabase.from('leads') as any)
+            .update({
+              status: 'rendez_vous_booke',
+              date_rdv: format(date, 'yyyy-MM-dd'),
+              meeting_booked_at: new Date().toISOString(),
+            })
+            .eq('id', linkedLead.id);
+          setRdvDateOpen(false);
           queryClient.invalidateQueries({ queryKey: ['linked-lead', selected?.id] });
           queryClient.invalidateQueries({ queryKey: ['leads'] });
           queryClient.invalidateQueries({ queryKey: ['all-linked-leads'] });

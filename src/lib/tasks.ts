@@ -10,6 +10,7 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   conversation_followup: 'Relancer la conversation',
   booking_followup: "Relancer la prise de RDV",
   manual_followup: 'Follow-up manuel',
+  rdv_result: 'Résultat du RDV',
 };
 
 export const PRIORITY_META: Record<TaskPriority, { label: string; emoji: string; className: string }> = {
@@ -25,7 +26,7 @@ const PRIORITY_RANK: Record<TaskPriority, number> = { urgent: 4, high: 3, medium
  * Compute the *effective* priority of a task at runtime.
  * Rules (highest wins):
  * - Overdue → urgent
- * - booking_followup pending → urgent
+ * - booking_followup or rdv_result pending → urgent
  * - manual_followup with follow_up_level >= 3 → urgent
  * - Due today OR follow_up_level == 2 → high
  * - conversation_followup waiting → medium
@@ -37,7 +38,7 @@ export function computeEffectivePriority(task: Task, leadFollowUpLevel?: number 
   const overdue = isPast(due) && !isToday(due);
 
   if (overdue) return 'urgent';
-  if (task.task_type === 'booking_followup') return 'urgent';
+  if (task.task_type === 'booking_followup' || task.task_type === 'rdv_result') return 'urgent';
   if (task.task_type === 'manual_followup' && (leadFollowUpLevel ?? 0) >= 3) return 'urgent';
 
   if (isToday(due)) return 'high';

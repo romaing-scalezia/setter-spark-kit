@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, CheckCircle2, Clock, AlarmClockOff, Eye, Loader2 } from 'lucide-react';
+import { ExternalLink, CheckCircle2, Clock, AlarmClockOff, Eye, Loader2, Trophy, XCircle, CalendarClock } from 'lucide-react';
 import { format, isPast, isToday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
@@ -22,11 +22,14 @@ interface TaskCardProps {
   onComplete: (task: EnrichedTask) => void;
   onSnooze?: (task: EnrichedTask) => void;
   onOpenLead: (task: EnrichedTask) => void;
+  onRdvWon?: (task: EnrichedTask) => void;
+  onRdvLost?: (task: EnrichedTask) => void;
+  onRdvPostpone?: (task: EnrichedTask) => void;
   isUpdating?: boolean;
   compact?: boolean;
 }
 
-export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, compact }: TaskCardProps) {
+export function TaskCard({ task, onComplete, onSnooze, onOpenLead, onRdvWon, onRdvLost, onRdvPostpone, isUpdating, compact }: TaskCardProps) {
   const navigate = useNavigate();
   const meta = PRIORITY_META[task.effectivePriority];
   const due = new Date(task.due_date);
@@ -105,34 +108,75 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, isUpdating, c
         >
           <Eye className="h-3.5 w-3.5" />
         </Button>
-        {onSnooze && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 px-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSnooze(task);
-            }}
-            data-testid={`task-snooze-${task.id}`}
-          >
-            <AlarmClockOff className="h-3.5 w-3.5" />
-          </Button>
+        {task.task_type === 'rdv_result' && onRdvWon && onRdvLost && onRdvPostpone ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700"
+              onClick={(e) => { e.stopPropagation(); onRdvWon(task); }}
+              disabled={isUpdating}
+              data-testid={`task-rdv-won-${task.id}`}
+            >
+              <Trophy className="h-3.5 w-3.5" />
+              {!compact && <span className="ml-1">Gagné</span>}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onRdvLost(task); }}
+              disabled={isUpdating}
+              data-testid={`task-rdv-lost-${task.id}`}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+              {!compact && <span className="ml-1">Perdu</span>}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 px-2"
+              onClick={(e) => { e.stopPropagation(); onRdvPostpone(task); }}
+              disabled={isUpdating}
+              title="Pas de changement — reporter à J+7"
+              data-testid={`task-rdv-postpone-${task.id}`}
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              {!compact && <span className="ml-1">+7j</span>}
+            </Button>
+          </>
+        ) : (
+          <>
+            {onSnooze && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSnooze(task);
+                }}
+                data-testid={`task-snooze-${task.id}`}
+              >
+                <AlarmClockOff className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8"
+              onClick={(e) => {
+                e.stopPropagation();
+                onComplete(task);
+              }}
+              disabled={isUpdating}
+              data-testid={`task-complete-${task.id}`}
+            >
+              {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+              {!compact && <span className="ml-1">Fait</span>}
+            </Button>
+          </>
         )}
-        <Button
-          size="sm"
-          variant="default"
-          className="h-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onComplete(task);
-          }}
-          disabled={isUpdating}
-          data-testid={`task-complete-${task.id}`}
-        >
-          {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          {!compact && <span className="ml-1">Fait</span>}
-        </Button>
       </div>
     </div>
   );

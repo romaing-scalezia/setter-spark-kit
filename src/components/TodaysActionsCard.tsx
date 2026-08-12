@@ -6,11 +6,13 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard, type EnrichedTask } from '@/components/TaskCard';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
+import { CloseWonModal } from '@/components/CloseWonModal';
+import { ReasonModal } from '@/components/ReasonModal';
 import { useToast } from '@/hooks/use-toast';
 import { ListTodo, ArrowRight } from 'lucide-react';
 import { computeEffectivePriority, sortByPriority, type Task } from '@/lib/tasks';
 import type { Lead } from '@/lib/constants';
-import { startOfDay, isPast, isToday, isThisWeek } from 'date-fns';
+import { startOfDay, isPast, isToday, isThisWeek, addDays, format } from 'date-fns';
 import { useState } from 'react';
 
 const MAX_VISIBLE = 6;
@@ -20,6 +22,8 @@ export function TodaysActionsCard() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [openLead, setOpenLead] = useState<Lead | null>(null);
+  const [rdvWonTask, setRdvWonTask] = useState<EnrichedTask | null>(null);
+  const [rdvLostTask, setRdvLostTask] = useState<EnrichedTask | null>(null);
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['dashboard-tasks', user?.id],
@@ -83,6 +87,86 @@ export function TodaysActionsCard() {
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
   });
 
+  const rdvWonMutation = useMutation({
+    mutationFn: async ({ task, amount }: { task: EnrichedTask; amount: number }) => {
+      if (!task.lead) throw new Error('Lead introuvable');
+      const { error: dealError } = await supabase.from('deals').insert({
+        lead_id: task.lead.id,
+        owner_id: task.lead.owner_id,
+        amount,
+        status: 'won',
+      });
+      if (dealError) throw dealError;
+      const { error: leadError } = await supabase
+        .from('leads')
+        .update({ status: 'ferme_gagne', last_status_change_at: new Date().toISOString() })
+        .eq('id', task.lead.id);
+      if (leadError) throw leadError;
+      await supabase.from('lead_events').insert({
+        lead_id: task.lead.id, user_id: user!.id, event_type: 'status_changed',
+        old_value: task.lead.status, new_value: 'ferme_gagne',
+        metadata: { amount },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-leads'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      setRdvWonTask(null);
+      toast({ title: 'Deal gagné 🎉' });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const rdvLostMutation = useMutation({
+    mutationFn: async ({ task, reason, detail }: { task: EnrichedTask; reason: string; detail?: string }) => {
+      if (!task.lead) throw new Error('Lead introuvable');
+      const { error } = await supabase
+        .from('leads')
+        .update({
+          status: 'ferme_perdu',
+          last_status_change_at: new Date().toISOString(),
+          closed_lost_at: new Date().toISOString(),
+          loss_reason: reason,
+          reason_detail: detail || null,
+          meeting_booked_at: null,
+          date_rdv: null,
+        })
+        .eq('id', task.lead.id);
+      if (error) throw error;
+      await supabase.from('lead_events').insert({
+        lead_id: task.lead.id, user_id: user!.id, event_type: 'status_changed',
+        old_value: task.lead.status, new_value: 'ferme_perdu',
+        metadata: { loss_reason: reason, reason_detail: detail ?? null },
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-leads'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['lead-events'] });
+      setRdvLostTask(null);
+      toast({ title: 'Lead marqué comme perdu' });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const rdvPostponeMutation = useMutation({
+    mutationFn: async (task: EnrichedTask) => {
+      const until = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+      const { error } = await supabase.from('tasks').update({ due_date: until }).eq('id', task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      toast({ title: 'Reporté à J+7' });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
   if (sorted.length === 0) return null;
 
   return (
@@ -104,6 +188,9 @@ export function TodaysActionsCard() {
               task={t}
               onComplete={(task) => completeMutation.mutate(task)}
               onOpenLead={(task) => task.lead && setOpenLead(task.lead)}
+              onRdvWon={(task) => setRdvWonTask(task)}
+              onRdvLost={(task) => setRdvLostTask(task)}
+              onRdvPostpone={(task) => rdvPostponeMutation.mutate(task)}
               isUpdating={completeMutation.isPending && completeMutation.variables?.id === t.id}
               compact
             />
@@ -123,6 +210,20 @@ export function TodaysActionsCard() {
         lead={openLead}
         open={!!openLead}
         onOpenChange={(o) => !o && setOpenLead(null)}
+      />
+
+      <CloseWonModal
+        open={!!rdvWonTask}
+        onOpenChange={(o) => !o && setRdvWonTask(null)}
+        lead={rdvWonTask?.lead ?? null}
+        onSubmit={(amount) => rdvWonTask && rdvWonMutation.mutate({ task: rdvWonTask, amount })}
+        isPending={rdvWonMutation.isPending}
+      />
+      <ReasonModal
+        open={!!rdvLostTask}
+        onOpenChange={(o) => !o && setRdvLostTask(null)}
+        type="loss"
+        onSubmit={(reason, detail) => rdvLostTask && rdvLostMutation.mutate({ task: rdvLostTask, reason, detail })}
       />
     </>
   );
