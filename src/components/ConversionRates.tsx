@@ -5,6 +5,7 @@ interface ConversionRatesProps {
   responses: number;
   callsProposed: number;
   meetingsBooked: number;
+  closedWon: number;
 }
 
 function pct(num: number, den: number): string {
@@ -12,12 +13,12 @@ function pct(num: number, den: number): string {
   return `${Math.round((num / den) * 100)}%`;
 }
 
-export function ConversionRates({ conversations, responses, callsProposed, meetingsBooked }: ConversionRatesProps) {
+export function ConversionRates({ conversations, responses, callsProposed, meetingsBooked, closedWon }: ConversionRatesProps) {
   const rates = [
     { label: 'Réponse', value: pct(responses, conversations), sub: `${responses}/${conversations}` },
     { label: 'Appel proposé', value: pct(callsProposed, responses), sub: `${callsProposed}/${responses}` },
     { label: 'Booking', value: pct(meetingsBooked, callsProposed), sub: `${meetingsBooked}/${callsProposed}` },
-    { label: 'Global', value: pct(meetingsBooked, conversations), sub: `${meetingsBooked}/${conversations}` },
+    { label: 'Conversion', value: pct(closedWon, meetingsBooked), sub: `${closedWon}/${meetingsBooked}` },
   ];
 
   return (

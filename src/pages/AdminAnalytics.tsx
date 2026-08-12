@@ -114,6 +114,7 @@ export default function AdminAnalytics() {
   const respondedCount = scopedLeads.filter((l) => RESPONDED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
   const callProposedCount = scopedLeads.filter((l) => CALL_PROPOSED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
   const rdvBookedCount = scopedLeads.filter((l) => RDV_BOOKED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
+  const closedWonCount = scopedLeads.filter((l) => l.status === 'ferme_gagne' && inPeriod(l.conversation_started_at || l.created_at)).length;
   const followUpCount = scopedLeads.filter((l) => l.status === 'follow_up').length;
   const lostCount = scopedLeads.filter((l) => l.status === 'ferme_perdu' && inPeriod(l.closed_lost_at || l.created_at)).length;
   const unqualifiedCount = scopedLeads.filter((l) => l.status === 'non_qualifie' && inPeriod(l.unqualified_at || l.created_at)).length;
@@ -323,12 +324,14 @@ export default function AdminAnalytics() {
                     responses={respondedCount}
                     callsProposed={callProposedCount}
                     meetingsBooked={rdvBookedCount}
+                    closedWon={closedWonCount}
                   />
                   <MiniFunnel
                     conversations={contactedCount}
                     responses={respondedCount}
                     callsProposed={callProposedCount}
                     meetingsBooked={rdvBookedCount}
+                    closedWon={closedWonCount}
                   />
                 </CardContent>
               </Card>

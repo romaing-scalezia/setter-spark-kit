@@ -150,6 +150,7 @@ export default function Dashboard() {
   const respondedCount = filteredLeads.filter((l) => RESPONDED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
   const callProposedCount = filteredLeads.filter((l) => CALL_PROPOSED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
   const rdvBookedCount = filteredLeads.filter((l) => RDV_BOOKED_STATUSES.has(l.status) && inPeriod(l.conversation_started_at || l.created_at)).length;
+  const closedWonCount = filteredLeads.filter((l) => l.status === 'ferme_gagne' && inPeriod(l.conversation_started_at || l.created_at)).length;
   const overdueFollowUps = filteredLeads.filter((l) => l.status === 'follow_up' && l.follow_up_date && new Date(l.follow_up_date) < new Date()).length;
 
   // Filter deals based on outreach-filtered leads
@@ -311,6 +312,7 @@ export default function Dashboard() {
                 responses={respondedCount}
                 callsProposed={callProposedCount}
                 meetingsBooked={rdvBookedCount}
+                closedWon={closedWonCount}
               />
             </CardContent>
           </Card>
