@@ -332,7 +332,10 @@ export default function AdminPage() {
 
   const checkSalesNav = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('check-sales-nav');
+      const { data: { session: s } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke('check-sales-nav', {
+        headers: s ? { Authorization: `Bearer ${s.access_token}` } : undefined,
+      });
       if (error) throw error;
       return data as { checked: number; updated: number; errors: number };
     },

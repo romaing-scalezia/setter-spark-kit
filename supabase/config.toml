@@ -1,1 +1,4 @@
 project_id = "tkyljyyggxkzoacrtuyd"
+
+[functions.check-sales-nav]
+verify_jwt = false
