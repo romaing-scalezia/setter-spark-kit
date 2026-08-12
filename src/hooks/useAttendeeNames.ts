@@ -145,21 +145,35 @@ interface AttendeeProfile {
   job_title: string | null;
 }
 
+// Unipile's /users/{identifier} response has no separate company field — the
+// current role/company only show up combined in `headline`, e.g.
+// "Partnerships Manager @ La Growth Machine". Split on the common separators;
+// if none match, the whole headline is kept as the job title.
+function splitHeadline(headline: string | null | undefined): AttendeeProfile {
+  if (!headline) return { company_name: null, job_title: null };
+  const match = headline.match(/^(.*?)\s+(?:@|chez|at)\s+(.+)$/i);
+  if (match) {
+    return { job_title: match[1].trim() || null, company_name: match[2].trim() || null };
+  }
+  return { job_title: headline.trim() || null, company_name: null };
+}
+
 function pickProfile(data: any): AttendeeProfile {
-  const company_name =
+  const explicitCompany =
     data?.company_name ??
     data?.current_company?.name ??
     data?.current_positions?.[0]?.company ??
     data?.work_experience?.[0]?.company ??
     null;
-  const job_title =
+  const explicitJobTitle =
     data?.job_title ??
     data?.current_positions?.[0]?.role ??
     data?.work_experience?.[0]?.position ??
-    data?.headline ??
-    data?.occupation ??
     null;
-  return { company_name, job_title };
+  if (explicitCompany || explicitJobTitle) {
+    return { company_name: explicitCompany, job_title: explicitJobTitle };
+  }
+  return splitHeadline(data?.headline ?? data?.occupation ?? null);
 }
 
 /**
