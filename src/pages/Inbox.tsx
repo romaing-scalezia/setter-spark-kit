@@ -933,6 +933,7 @@ export default function Inbox() {
                 linkedin_url: data.linkedin_url || null,
                 company_name: data.company_name || null,
                 job_title: data.job_title || null,
+                created_at: data.created_at,
                 persona_id: data.persona_id || null,
                 outreach_type: (data.outreach_type || null) as any,
                 status: 'conversation_engagee',

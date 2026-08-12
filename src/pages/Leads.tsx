@@ -156,7 +156,7 @@ export default function Leads() {
   };
 
   const createLead = useMutation({
-    mutationFn: async (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
+    mutationFn: async (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; created_at: string; persona_id: string | null; outreach_type: string | null; setter_id?: string | null }) => {
       const { data: lead, error } = await supabase.from('leads').insert({
         owner_id: user!.id,
         setter_id: data.setter_id || user!.id,
@@ -165,6 +165,7 @@ export default function Leads() {
         linkedin_url: data.linkedin_url || null,
         company_name: data.company_name || null,
         job_title: data.job_title || null,
+        created_at: data.created_at,
         persona_id: data.persona_id || null,
         outreach_type: (data.outreach_type || null) as any,
         status: 'conversation_engagee' as LeadStatus,

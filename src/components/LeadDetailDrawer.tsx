@@ -8,10 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { ExternalLink, Calendar, Building2, Briefcase, Save, Send, Target, Pencil, Trash2, X, Check, CalendarClock, ArrowRightCircle, Mail, Phone, Trophy } from 'lucide-react';
 import { FollowUpDateModal } from '@/components/FollowUpDateModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,6 +43,8 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
   const [jobTitle, setJobTitle] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [createdAt, setCreatedAt] = useState<Date>(new Date());
+  const [createdAtOpen, setCreatedAtOpen] = useState(false);
   const [personaId, setPersonaId] = useState<string>('none');
   const [outreachType, setOutreachType] = useState<string>('none');
   const [setterId, setSetterId] = useState<string>('');
@@ -105,11 +110,12 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
       setJobTitle(lead.job_title || '');
       setEmail(lead.email || '');
       setPhone(lead.phone || '');
+      setCreatedAt(new Date(lead.created_at));
       setPersonaId((lead as any).persona_id || 'none');
       setOutreachType(lead.outreach_type || 'none');
       setSetterId((lead as any).setter_id || lead.owner_id);
     }
-  }, [lead?.id, lead?.company_name, lead?.job_title, lead?.email, lead?.phone, (lead as any)?.persona_id, lead?.outreach_type, (lead as any)?.setter_id]);
+  }, [lead?.id, lead?.company_name, lead?.job_title, lead?.email, lead?.phone, lead?.created_at, (lead as any)?.persona_id, lead?.outreach_type, (lead as any)?.setter_id]);
 
   if (!lead) return null;
 
@@ -123,6 +129,7 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
       updateData.job_title = jobTitle || null;
       updateData.email = email || null;
       updateData.phone = phone || null;
+      updateData.created_at = createdAt.toISOString();
       updateData.persona_id = personaId !== 'none' ? personaId : null;
       updateData.outreach_type = outreachType !== 'none' ? outreachType : null;
       if (isTeam && setterId) updateData.setter_id = setterId;
@@ -219,6 +226,33 @@ export function LeadDetailDrawer({ lead, open, onOpenChange, events = [], onDele
                   <Label className="text-xs">Portable</Label>
                   <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="06 12 34 56 78" className="h-8 text-sm" />
                 </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Date de création</Label>
+                <Popover open={createdAtOpen} onOpenChange={setCreatedAtOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn('h-8 w-full justify-start text-left text-sm font-normal')}
+                      data-testid="lead-created-at"
+                    >
+                      <Calendar className="mr-2 h-3.5 w-3.5" />
+                      {format(createdAt, 'dd MMMM yyyy', { locale: fr })}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarPicker
+                      mode="single"
+                      selected={createdAt}
+                      onSelect={(d) => { if (d) { setCreatedAt(d); setCreatedAtOpen(false); } }}
+                      disabled={(d) => d > new Date()}
+                      locale={fr}
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               {myPersonas.length > 0 && (
                 <div className="space-y-1">

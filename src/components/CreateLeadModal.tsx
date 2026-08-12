@@ -7,14 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Users } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { Loader2, Users, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { useTeammates, teammateLabel } from '@/hooks/useTeammates';
 import type { Persona } from '@/pages/Personas';
 
 interface CreateLeadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; persona_id: string | null; outreach_type: string | null; setter_id: string | null }) => Promise<void>;
+  onSubmit: (data: { first_name: string; last_name: string; linkedin_url: string; company_name: string; job_title: string; created_at: string; persona_id: string | null; outreach_type: string | null; setter_id: string | null }) => Promise<void>;
   initialValues?: {
     first_name?: string | null;
     last_name?: string | null;
@@ -39,6 +44,8 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
+  const [createdAt, setCreatedAt] = useState<Date>(new Date());
+  const [createdAtOpen, setCreatedAtOpen] = useState(false);
   const [personaId, setPersonaId] = useState('none');
   const [outreachType, setOutreachType] = useState('message_texte');
   const [setterId, setSetterId] = useState<string>('');
@@ -55,6 +62,7 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
       setLinkedinUrl(initialValues?.linkedin_url ?? '');
       setCompanyName(initialValues?.company_name ?? '');
       setJobTitle(initialValues?.job_title ?? '');
+      setCreatedAt(new Date());
     }
   }, [open, initialValues?.first_name, initialValues?.last_name, initialValues?.linkedin_url, initialValues?.company_name, initialValues?.job_title]);
 
@@ -84,6 +92,7 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
       linkedin_url: linkedinUrl,
       company_name: companyName,
       job_title: jobTitle,
+      created_at: createdAt.toISOString(),
       persona_id: personaId !== 'none' ? personaId : null,
       outreach_type: outreachType,
       setter_id: isTeam ? (setterId || user!.id) : null,
@@ -93,6 +102,7 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
     setLinkedinUrl('');
     setCompanyName('');
     setJobTitle('');
+    setCreatedAt(new Date());
     setPersonaId('none');
     setOutreachType('message_texte');
     setSetterId(user?.id ?? '');
@@ -130,6 +140,32 @@ export function CreateLeadModal({ open, onOpenChange, onSubmit, initialValues }:
               <Label htmlFor="jobTitle">Poste</Label>
               <Input id="jobTitle" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Titre du poste" />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Date de création</Label>
+            <Popover open={createdAtOpen} onOpenChange={setCreatedAtOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className={cn('w-full justify-start text-left font-normal')}
+                  data-testid="create-lead-created-at"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(createdAt, 'dd MMMM yyyy', { locale: fr })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={createdAt}
+                  onSelect={(d) => { if (d) { setCreatedAt(d); setCreatedAtOpen(false); } }}
+                  disabled={(d) => d > new Date()}
+                  locale={fr}
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="space-y-2">
             <Label>Format d'approche *</Label>
