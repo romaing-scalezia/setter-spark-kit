@@ -45,6 +45,8 @@ export default function Dashboard() {
   const [dealAmount, setDealAmount] = useState('');
   const [createLeadOpen, setCreateLeadOpen] = useState(false);
   const [skippedLeadIds, setSkippedLeadIds] = useState<Set<string>>(new Set());
+  const [revenueListOpen, setRevenueListOpen] = useState(false);
+  const [clientsListOpen, setClientsListOpen] = useState(false);
 
   const { data: leads = [] } = useQuery({
     queryKey: ['dashboard-leads', user?.id],
@@ -155,8 +157,17 @@ export default function Dashboard() {
   const filteredDeals = useMemo(() => deals.filter((d: any) =>
     filteredLeadIds.has(d.lead_id) && inPeriod(d.created_at)
   ), [deals, filteredLeadIds, dateRange]);
-  const totalRevenue = filteredDeals.filter((d: any) => d.status === 'won').reduce((s: number, d: any) => s + Number(d.amount), 0);
+  const wonDeals = filteredDeals.filter((d: any) => d.status === 'won');
+  const totalRevenue = wonDeals.reduce((s: number, d: any) => s + Number(d.amount), 0);
   const wonLeads = filteredLeads.filter((l) => l.status === 'ferme_gagne' && !deals.find((d: any) => d.lead_id === l.id));
+
+  const leadById = useMemo(() => new Map(filteredLeads.map((l) => [l.id, l])), [filteredLeads]);
+  const wonDealsWithLead = useMemo(
+    () => wonDeals
+      .map((d: any) => ({ ...d, lead: leadById.get(d.lead_id) }))
+      .sort((a, b) => Number(b.amount) - Number(a.amount)),
+    [wonDeals, leadById],
+  );
 
   const weekLabel = useMemo(() => {
     const now = new Date();
@@ -318,14 +329,24 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 rounded-lg bg-primary/10">
+                <button
+                  type="button"
+                  onClick={() => setRevenueListOpen(true)}
+                  className="text-center p-3 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
+                  data-testid="dashboard-revenue-total"
+                >
                   <p className="text-2xl font-bold text-primary">{totalRevenue.toLocaleString('fr-FR')}€</p>
                   <p className="text-xs text-muted-foreground">CA total</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-primary/10">
-                  <p className="text-2xl font-bold text-primary">{filteredDeals.filter((d: any) => d.status === 'won').length}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClientsListOpen(true)}
+                  className="text-center p-3 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
+                  data-testid="dashboard-revenue-clients"
+                >
+                  <p className="text-2xl font-bold text-primary">{wonDeals.length}</p>
                   <p className="text-xs text-muted-foreground">Clients</p>
-                </div>
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -389,6 +410,48 @@ export default function Dashboard() {
               Ajouter
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revenue breakdown modal */}
+      <Dialog open={revenueListOpen} onOpenChange={setRevenueListOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Chiffre d'affaires — {totalRevenue.toLocaleString('fr-FR')}€</DialogTitle>
+          </DialogHeader>
+          {wonDealsWithLead.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Aucun deal sur cette période.</p>
+          ) : (
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {wonDealsWithLead.map((d: any) => (
+                <div key={d.id} className="flex items-center justify-between rounded-md border p-2.5 text-sm">
+                  <span className="truncate">{d.lead ? `${d.lead.first_name} ${d.lead.last_name}` : 'Lead supprimé'}</span>
+                  <span className="font-semibold text-primary shrink-0 ml-2">{Number(d.amount).toLocaleString('fr-FR')}€</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clients (closed-won) list modal */}
+      <Dialog open={clientsListOpen} onOpenChange={setClientsListOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Clients — {wonDeals.length}</DialogTitle>
+          </DialogHeader>
+          {wonDealsWithLead.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Aucun client sur cette période.</p>
+          ) : (
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {wonDealsWithLead.map((d: any) => (
+                <div key={d.id} className="flex items-center justify-between rounded-md border p-2.5 text-sm">
+                  <span className="truncate">{d.lead ? `${d.lead.first_name} ${d.lead.last_name}` : 'Lead supprimé'}</span>
+                  <Badge variant="secondary" className="shrink-0 ml-2">Fermé gagné</Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
