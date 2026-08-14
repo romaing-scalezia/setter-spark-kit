@@ -85,34 +85,37 @@ export default function Onboarding() {
     }
   }, [step, firstName, lastName, businessType, industry, monthlyRevenue, prospectingVolume]);
 
-  const handleNext = async () => {
-    if (!canNext()) return;
+  const stepPayload = (): Record<string, unknown> => {
+    switch (step) {
+      case 1: return { full_name: `${firstName.trim()} ${lastName.trim()}` };
+      case 2: return { business_type: businessType };
+      case 3: return { industry };
+      case 4: return { monthly_revenue: monthlyRevenue };
+      case 5: return { prospecting_volume: prospectingVolume, onboarding_completed: true };
+      default: return {};
+    }
+  };
 
-    // Last step: save profile, mark onboarding complete, go to dashboard
-    if (step === TOTAL_STEPS) {
-      setSaving(true);
-      try {
-        if (!user) return;
-        const { error } = await supabase.from('profiles').update({
-          full_name: `${firstName.trim()} ${lastName.trim()}`,
-          business_type: businessType,
-          industry,
-          monthly_revenue: monthlyRevenue,
-          prospecting_volume: prospectingVolume,
-          onboarding_completed: true,
-        }).eq('id', user.id);
-        if (error) throw error;
+  const handleNext = async () => {
+    if (!canNext() || !user) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('profiles').update(stepPayload()).eq('id', user.id);
+      if (error) throw error;
+
+      if (step === TOTAL_STEPS) {
         await refreshUserData();
         navigate('/dashboard', { replace: true });
-      } catch (err: any) {
-        toast({ title: 'Erreur', description: err.message || 'Une erreur est survenue', variant: 'destructive' });
-      } finally {
-        setSaving(false);
+        return;
       }
-      return;
-    }
 
-    setStep(s => s + 1);
+      setStep(s => s + 1);
+    } catch (err: any) {
+      toast({ title: 'Erreur', description: err.message || 'Une erreur est survenue', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const progress = (step / TOTAL_STEPS) * 100;

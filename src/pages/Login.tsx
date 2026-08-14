@@ -48,16 +48,12 @@ export default function Login() {
           redirectTo: `${window.location.origin}/auth/callback`
         }
       });
-      if (result.error) {
-        toast({ variant: 'destructive', title: 'Erreur Google', description: String(result.error) });
+      if (error) {
+        toast({ variant: 'destructive', title: 'Erreur Google', description: String(error.message) });
         setGoogleLoading(false);
         return;
       }
-      if (result.redirected) {
-        return;
-      }
-      // Non-redirect flow: session is set, go to callback to bootstrap
-      navigate('/auth/callback');
+      // Success: supabase-js already redirected the browser to Google.
     } catch (err) {
       toast({ variant: 'destructive', title: 'Erreur Google', description: String(err) });
       setGoogleLoading(false);
