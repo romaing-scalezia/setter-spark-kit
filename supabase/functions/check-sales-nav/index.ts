@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const UNIPILE_BASE_URL = "https://api20.unipile.com:15052";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -16,10 +18,9 @@ serve(async (req) => {
     const supabaseUrl    = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
       ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
-    const unipileUrl     = Deno.env.get("UNIPILE_URL");
     const unipileKey     = Deno.env.get("UNIPILE_API_KEY");
 
-    if (!supabaseUrl || !serviceRoleKey || !unipileUrl || !unipileKey) {
+    if (!supabaseUrl || !serviceRoleKey || !unipileKey) {
       return new Response("Missing env vars", { status: 500 });
     }
 
@@ -43,7 +44,7 @@ serve(async (req) => {
 
     for (const { user_id, account_id } of accounts) {
       try {
-        const meRes = await fetch(`${unipileUrl}/api/v1/users/me?account_id=${account_id}`, {
+        const meRes = await fetch(`${UNIPILE_BASE_URL}/api/v1/users/me?account_id=${account_id}`, {
           headers: { "X-API-KEY": unipileKey, "accept": "application/json" },
         });
 

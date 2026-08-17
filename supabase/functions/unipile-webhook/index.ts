@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const UNIPILE_BASE_URL = "https://api20.unipile.com:15052";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type",
@@ -105,10 +107,9 @@ serve(async (req) => {
 
           // Si le payload ne le précise pas, on appelle l'API Unipile pour vérifier
           if (!hasSalesNav) {
-            const unipileUrl = Deno.env.get("UNIPILE_URL");
             const unipileKey = Deno.env.get("UNIPILE_API_KEY");
-            if (unipileUrl && unipileKey) {
-              const meRes = await fetch(`${unipileUrl}/api/v1/users/me?account_id=${account_id}`, {
+            if (unipileKey) {
+              const meRes = await fetch(`${UNIPILE_BASE_URL}/api/v1/users/me?account_id=${account_id}`, {
                 headers: { "X-API-KEY": unipileKey, "accept": "application/json" },
               });
               if (meRes.ok) {

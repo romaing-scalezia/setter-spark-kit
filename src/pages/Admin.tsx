@@ -57,6 +57,7 @@ interface EnrichedUser {
   debug_role_switch_enabled: boolean;
   membership: Membership | null;
   linkedin_connected: boolean;
+  has_sales_nav: boolean;
   leads_count: number;
   coach_of: string[];
   coached_by: string[];
@@ -498,6 +499,7 @@ export default function AdminPage() {
                           <TableHead>Plan</TableHead>
                           <TableHead>Source</TableHead>
                           <TableHead>LinkedIn</TableHead>
+                          <TableHead>Sales Nav</TableHead>
                           <TableHead className="text-right">Leads</TableHead>
                           <TableHead>Inscription</TableHead>
                           <TableHead>Dernière co.</TableHead>
@@ -536,6 +538,11 @@ export default function AdminPage() {
                                 ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                                 : <X className="h-4 w-4 text-muted-foreground/40" />}
                             </TableCell>
+                            <TableCell>
+                              {u.has_sales_nav
+                                ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                : <X className="h-4 w-4 text-muted-foreground/40" />}
+                            </TableCell>
                             <TableCell className="text-right text-sm font-medium">{u.leads_count}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{fmt(u.created_at)}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">{fmt(u.last_sign_in_at)}</TableCell>
@@ -548,7 +555,7 @@ export default function AdminPage() {
                           </TableRow>
                         ))}
                         {filtered.length === 0 && (
-                          <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground text-sm">Aucun utilisateur trouvé</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground text-sm">Aucun utilisateur trouvé</TableCell></TableRow>
                         )}
                       </TableBody>
                     </Table>
@@ -840,6 +847,7 @@ export default function AdminPage() {
                     { label: 'Essai restant', value: selectedUser.membership?.trial_days_left != null ? `${selectedUser.membership.trial_days_left} jours` : '—' },
                     { label: 'Leads', value: String(selectedUser.leads_count) },
                     { label: 'LinkedIn', value: selectedUser.linkedin_connected ? 'Connecté' : 'Non connecté' },
+                    { label: 'Sales Nav', value: selectedUser.has_sales_nav ? 'Oui' : 'Non' },
                     { label: 'Onboarding', value: selectedUser.onboarding_completed ? 'Complété' : 'En cours' },
                     { label: 'Inscription', value: fmt(selectedUser.created_at) },
                     { label: 'Dernière co.', value: fmt(selectedUser.last_sign_in_at) },

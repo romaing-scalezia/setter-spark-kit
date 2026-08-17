@@ -71,7 +71,7 @@ serve(async (req) => {
       { data: leadCounts },
       { data: campaignJobs },
     ] = await Promise.all([
-      supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type"),
+      supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type, has_sales_nav"),
       supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("coach_assignments").select("*"),
@@ -201,6 +201,7 @@ serve(async (req) => {
           cancel_at_period_end: live?.cancelAtPeriodEnd ?? false,
         } : null,
         linkedin_connected: !!unipile && unipile.status === "connected",
+        has_sales_nav: (profile as any).has_sales_nav || false,
         leads_count: leadsCountMap.get(u.id) || 0,
         coach_of: coachOf,
         coached_by: coachedBy,
