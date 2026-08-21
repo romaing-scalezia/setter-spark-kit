@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Navigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { KpiCard } from '@/components/KpiCard';
 import { ConversionRates } from '@/components/ConversionRates';
@@ -33,7 +33,7 @@ import { TEMPERATURE_CONFIG } from '@/lib/leadScoring';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function Dashboard() {
-  const { user, profile, activeRole } = useAuth();
+  const { user, profile } = useAuth();
   const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange);
   const { teammates, isTeam } = useTeammates();
   const gamification = useGamification();
@@ -182,8 +182,6 @@ export default function Dashboard() {
     () => getPriorityActions(filteredLeads).filter((pa) => !skippedLeadIds.has(pa.lead.id)),
     [filteredLeads, skippedLeadIds],
   );
-
-  if (activeRole === 'coach') return <Navigate to="/coach" replace />;
 
   const skipLead = (id: string) =>
     setSkippedLeadIds((prev) => new Set([...prev, id]));

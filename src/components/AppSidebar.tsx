@@ -54,11 +54,11 @@ function LogoMark() {
 type NavDef = { title: string; url: string; icon: string; roles: string[]; badge?: string; tour?: string };
 
 const navMain: NavDef[] = [
-  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',      roles: ['user', 'admin'], tour: 'dashboard' },
-  { title: 'Inbox',      url: '/inbox',       icon: 'inbox',     roles: ['user', 'admin'], tour: 'inbox' },
-  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'admin'], tour: 'campaigns' },
-  { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'admin'], tour: 'leads' },
-  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'admin'], tour: 'followup' },
+  { title: 'Dashboard',  url: '/dashboard',  icon: 'dash',      roles: ['user', 'coach', 'admin'], tour: 'dashboard' },
+  { title: 'Inbox',      url: '/inbox',       icon: 'inbox',     roles: ['user', 'coach', 'admin'], tour: 'inbox' },
+  { title: 'Campagnes',  url: '/campaigns',   icon: 'megaphone', roles: ['user', 'coach', 'admin'], tour: 'campaigns' },
+  { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'coach', 'admin'], tour: 'leads' },
+  { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'coach', 'admin'], tour: 'followup' },
   { title: 'Supervision', url: '/coach',      icon: 'supervision', roles: ['coach'] },
 ];
 

@@ -301,7 +301,7 @@ export function PersonasContent() {
         .single();
       if (error) throw error;
 
-      if (!isCoachOrAdmin && createdPersona?.id) {
+      if (activeRole !== 'admin' && createdPersona?.id) {
         const existingPrimary = userPersonas.some((up) => up.user_id === user!.id && up.is_primary);
         const { error: assignmentError } = await supabase.from('user_personas').insert({
           user_id: user!.id,
