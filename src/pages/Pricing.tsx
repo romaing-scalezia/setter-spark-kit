@@ -14,7 +14,7 @@ const FEATURES = [
   'Gestion des leads & Pipeline',
   'Suivi des performances',
   'Bibliothèque de scripts',
-  'Import/Export des prospects',
+  'Import Sales Navigator',
 ];
 
 function LogoMark() {
@@ -106,22 +106,13 @@ export default function Pricing() {
                 <p className="text-xs text-muted-foreground mt-1">Sans engagement · Résiliable à tout moment</p>
               </div>
 
-              {!isStarterpack && (
-                <div className="space-y-3 flex-1">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-white text-primary text-xs font-medium px-3 py-1">
-                    🎉 14 jours d'essai gratuit
-                  </span>
-                  <p className="text-xs text-muted-foreground">Sans carte bancaire requise pour l'essai</p>
-                </div>
-              )}
-
               <button
                 onClick={handleSubscribe}
                 disabled={loading}
                 className="w-full rounded-xl bg-primary text-primary-foreground font-semibold py-3.5 text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors disabled:opacity-70"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isTrialing && !trialExpired ? 'Passer à l\'abonnement' : '14j d\'essai gratuit'}
+                {isTrialing && !trialExpired ? 'Passer à l\'abonnement' : 'S\'abonner'}
               </button>
 
               <p className="text-[10px] text-center text-muted-foreground">
