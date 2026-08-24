@@ -70,14 +70,16 @@ serve(async (req) => {
       { data: unipileAccounts },
       { data: leadCounts },
       { data: campaignJobs },
+      { data: campaignCounts },
     ] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type, has_sales_nav"),
-      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id"),
+      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("coach_assignments").select("*"),
       supabaseAdmin.from("unipile_accounts" as any).select("user_id, status, account_id"),
       supabaseAdmin.rpc("get_leads_count_by_owner"),
       supabaseAdmin.from("campaign_jobs" as any).select("id, status, error_message, created_at").eq("status", "error").order("created_at", { ascending: false }).limit(50),
+      supabaseAdmin.rpc("get_campaign_counts_by_user"),
     ]);
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
@@ -91,6 +93,16 @@ serve(async (req) => {
     const leadsCountMap = new Map<string, number>(
       (leadCounts || []).map((l: any) => [l.owner_id, Number(l.lead_count)])
     );
+
+    // Same aggregation pattern: one row per (user_id, status) instead of per campaign.
+    const campaignCountsMap = new Map<string, Record<string, number>>();
+    for (const row of (campaignCounts || []) as any[]) {
+      const counts = campaignCountsMap.get(row.user_id) ?? {};
+      counts[row.status] = Number(row.campaign_count);
+      campaignCountsMap.set(row.user_id, counts);
+    }
+
+    const PROSPECT_QUOTA: Record<string, number> = { free: 400, starter: 400, pro: 2000, coach: 0 };
 
     // Live Stripe lookup: local `memberships` rows only mirror webhook events, which can
     // drift (missed events, hardcoded plan on checkout, etc). Pulling the subscription
@@ -172,6 +184,9 @@ serve(async (req) => {
           : false;
       const mrrCents = isPaid ? (live?.amountCents ?? 0) : 0;
 
+      const campaignCounts = campaignCountsMap.get(u.id) ?? {};
+      const prospectQuota = PROSPECT_QUOTA[membership?.plan ?? "free"] ?? 0;
+
       return {
         id: u.id,
         email: u.email,
@@ -203,6 +218,16 @@ serve(async (req) => {
         linkedin_connected: !!unipile && unipile.status === "connected",
         has_sales_nav: (profile as any).has_sales_nav || false,
         leads_count: leadsCountMap.get(u.id) || 0,
+        campaigns: {
+          active: campaignCounts.active || 0,
+          paused: campaignCounts.paused || 0,
+          completed: campaignCounts.completed || 0,
+        },
+        sales_nav_import: {
+          count: membership?.prospects_imported_count || 0,
+          quota: prospectQuota,
+          reset_at: membership?.prospects_imported_reset_at || null,
+        },
         coach_of: coachOf,
         coached_by: coachedBy,
       };
