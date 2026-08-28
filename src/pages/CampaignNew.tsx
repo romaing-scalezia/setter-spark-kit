@@ -510,6 +510,12 @@ export default function CampaignNew() {
           const executeAt = new Date();
           executeAt.setUTCHours(0, 0, 0, 0);
           executeAt.setDate(executeAt.getDate() + dayOffset);
+
+          // Ne jamais programmer un envoi le week-end : décale au lundi suivant
+          while ([0, 6].includes(new Date(executeAt.toLocaleString('en-US', { timeZone: 'Europe/Paris' })).getDay())) {
+            executeAt.setDate(executeAt.getDate() + 1);
+          }
+
           executeAt.setUTCMinutes(randomMinute - PARIS_OFFSET * 60);
 
           // Si le créneau calculé est déjà passé (lancement en cours de journée), démarre maintenant

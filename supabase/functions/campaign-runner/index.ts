@@ -50,8 +50,33 @@ function stepToJobActionType(actionType: string, stepOrder: number): string {
   return actionType;
 }
 
+// Jour de la semaine (0=dimanche...6=samedi) d'une date donnée, en heure de Paris.
+function parisWeekday(d: Date): number {
+  return new Date(d.toLocaleString("en-US", { timeZone: "Europe/Paris" })).getDay();
+}
+
+// Heure locale (0-23) d'une date donnée, en heure de Paris.
+function parisHour(d: Date): number {
+  return new Date(d.toLocaleString("en-US", { timeZone: "Europe/Paris" })).getHours();
+}
+
+// Garde-fou : n'exécute jamais rien en dehors des jours ouvrés 8h-20h (Paris).
+// Filet de sécurité indépendant de la programmation des jobs — même si un
+// execute_at erroné ou un backlog en attente devient "dû", rien ne part
+// tant qu'on n'est pas dans la fenêtre autorisée.
+function isWithinWorkingHours(): boolean {
+  const nowInstant = new Date();
+  const day  = parisWeekday(nowInstant);
+  const hour = parisHour(nowInstant);
+  return day >= 1 && day <= 5 && hour >= 8 && hour < 20;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  if (!isWithinWorkingHours()) {
+    return jsonResponse({ processed: 0, skipped: "outside_working_hours" });
+  }
 
   const apiKey         = Deno.env.get("UNIPILE_API_KEY");
   const supabaseUrl    = Deno.env.get("SUPABASE_URL");
@@ -110,10 +135,29 @@ serve(async (req) => {
 
     // Construit la liste des action_types dont le quota n'est pas plein
     const availableTypes: string[] = [];
+    const fullTypes: string[] = [];
     if (counts.visits   < MAX_VISITS_PER_DAY)   availableTypes.push("visit");
+    else                                        fullTypes.push("visit");
     if (counts.invites  < MAX_INVITES_PER_DAY)  availableTypes.push("invite");
+    else                                        fullTypes.push("invite");
     if (counts.messages < MAX_MESSAGES_PER_DAY) {
       availableTypes.push("message_1", "message_2", "message_3");
+    } else {
+      fullTypes.push("message_1", "message_2", "message_3");
+    }
+
+    // Les jobs bloqués par un quota plein ne doivent pas rester en attente
+    // avec un execute_at périmé jusqu'à la remise à zéro du quota à minuit —
+    // c'est exactement ce qui provoquait des rafales d'exécution en pleine
+    // nuit. On les replanifie tout de suite sur le prochain créneau ouvré valide.
+    if (fullTypes.length > 0) {
+      await admin
+        .from("campaign_jobs")
+        .update({ execute_at: scheduleInWorkingHours(1) })
+        .eq("user_id", userId)
+        .eq("status", "pending")
+        .in("action_type", fullTypes)
+        .lte("execute_at", now);
     }
 
     if (availableTypes.length === 0) {
@@ -150,9 +194,17 @@ serve(async (req) => {
     for (const job of jobs) {
       const lead = job.campaign_leads;
 
-      if (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   continue;
-      if (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  continue;
-      if (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY) continue;
+      // Le quota a pu se remplir en cours de traitement (jobs précédents de
+      // cette même exécution) : on replanifie plutôt que de laisser un
+      // execute_at périmé trainer jusqu'à la remise à zéro du quota.
+      const quotaJustFilled =
+        (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   ||
+        (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  ||
+        (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY);
+      if (quotaJustFilled) {
+        await admin.from("campaign_jobs").update({ execute_at: scheduleInWorkingHours(1) }).eq("id", job.id);
+        continue;
+      }
 
       await admin.from("campaign_jobs").update({ status: "running" }).eq("id", job.id);
 
@@ -404,6 +456,11 @@ serve(async (req) => {
 
     // Si delayDays = 0 et qu'on est déjà après 18h, décale au lendemain
     if (delayDays === 0 && currentHour >= 18) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    // Ne jamais programmer un envoi le week-end : décale au lundi suivant
+    while (parisWeekday(target) === 0 || parisWeekday(target) === 6) {
       target.setDate(target.getDate() + 1);
     }
 
