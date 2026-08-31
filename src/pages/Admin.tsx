@@ -149,17 +149,20 @@ export default function AdminPage() {
   const kpis = useMemo(() => {
     const total = users.length;
     const trialing = users.filter(u => u.membership?.status === 'trialing').length;
-    const paid = users.filter(u => u.membership?.is_paid).length;
+    // Exclut le compte de l'admin qui consulte la page : son propre abonnement
+    // (perso ou de test) ne doit pas gonfler le nombre de vrais clients payants.
+    const revenueUsers = users.filter(u => u.id !== user?.id);
+    const paid = revenueUsers.filter(u => u.membership?.is_paid).length;
     // mrr_cents comes straight from the live Stripe subscription amount (Admin edge function),
     // annual plans already normalized to a monthly-equivalent amount.
-    const mrr = Math.round(users.reduce((sum, u) => sum + (u.membership?.mrr_cents ?? 0), 0)) / 100;
+    const mrr = Math.round(revenueUsers.reduce((sum, u) => sum + (u.membership?.mrr_cents ?? 0), 0)) / 100;
     const linkedinOk = users.filter(u => u.linkedin_connected).length;
     const starterpack = users.filter(u => u.source === 'starterpack').length;
     const newThisWeek = users.filter(u => {
       try { return differenceInDays(new Date(), new Date(u.created_at)) <= 7; } catch { return false; }
     }).length;
     return { total, trialing, paid, mrr, linkedinOk, starterpack, newThisWeek };
-  }, [users]);
+  }, [users, user?.id]);
 
   // ─── Filtered users ────────────────────────────────────────────────────────
   const filtered = useMemo(() => users.filter(u => {
