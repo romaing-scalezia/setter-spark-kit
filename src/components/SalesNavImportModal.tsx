@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Search, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { parseFunctionErrorBody } from '@/lib/functionsError';
 
 interface Prospect {
   provider_id: string | null;
@@ -87,7 +88,10 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
         body: { action: 'preview', url: url.trim(), limit: 2500 },
       });
 
-      if (error) throw error;
+      if (error) {
+        const body = await parseFunctionErrorBody(error);
+        throw new Error(body?.error || error.message);
+      }
       if (data?.error) throw new Error(data.error);
 
       const prv: Prospect[] = data.prospects ?? [];
@@ -117,7 +121,10 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
         body: { action: 'preview', url: currentUrl, limit: 2500, cursor: nextCursor },
       });
 
-      if (error) throw error;
+      if (error) {
+        const body = await parseFunctionErrorBody(error);
+        throw new Error(body?.error || error.message);
+      }
       if (data?.error) throw new Error(data.error);
 
       const more: Prospect[] = data.prospects ?? [];

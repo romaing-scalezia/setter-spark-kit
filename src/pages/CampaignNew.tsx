@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ArrowLeft, ArrowRight, Upload, Check, Loader2, Info, Linkedin } from 'lucide-react';
 import { SalesNavImportModal, type SalesNavProspect } from '@/components/SalesNavImportModal';
+import { parseFunctionErrorBody } from '@/lib/functionsError';
 
 /* ─── Types ─── */
 type ScenarioType = 'A' | 'B' | 'C' | 'D';
@@ -462,9 +463,16 @@ export default function CampaignNew() {
 
     // Décrémente le quota Sales Nav uniquement au lancement (pas sur brouillon)
     if (status === 'active' && salesNavCount > 0) {
-      const { data: quotaData } = await supabase.functions.invoke('sales-nav-import', {
+      const { data: quotaData, error: quotaError } = await supabase.functions.invoke('sales-nav-import', {
         body: { action: 'confirm', count: salesNavCount },
       });
+      if (quotaError) {
+        const body = await parseFunctionErrorBody(quotaError);
+        if (body?.error === 'quota_exceeded') {
+          throw new Error(`Quota mensuel Sales Navigator dépassé (${body.current}/${body.quota})`);
+        }
+        throw new Error(body?.error || quotaError.message);
+      }
       if (quotaData?.error === 'quota_exceeded') {
         throw new Error(`Quota mensuel Sales Navigator dépassé (${quotaData.current}/${quotaData.quota})`);
       }
