@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Search, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Search, AlertTriangle, CheckCircle2, XCircle, Linkedin } from 'lucide-react';
 import { parseFunctionErrorBody } from '@/lib/functionsError';
+import { LinkedInConnectDialog } from '@/components/LinkedInConnectDialog';
 
 interface Prospect {
   provider_id: string | null;
@@ -60,6 +61,8 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
   const [selected, setSelected]       = useState<Set<string>>(new Set());
   const [nextCursor, setNextCursor]   = useState<string | null>(null);
   const [currentUrl, setCurrentUrl]   = useState<string>('');
+  const [reauthAccountId, setReauthAccountId] = useState<string | null>(null);
+  const [reconnectOpen, setReconnectOpen]     = useState(false);
 
   const reset = () => {
     setUrl('');
@@ -68,6 +71,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
     setSelected(new Set());
     setNextCursor(null);
     setCurrentUrl('');
+    setReauthAccountId(null);
   };
 
   const handleClose = () => {
@@ -82,6 +86,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
     setProspects([]);
     setSummary(null);
     setSelected(new Set());
+    setReauthAccountId(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('sales-nav-import', {
@@ -90,6 +95,10 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
 
       if (error) {
         const body = await parseFunctionErrorBody(error);
+        if (body?.error === 'linkedin_reauth_required') {
+          setReauthAccountId((body.account_id as string) ?? null);
+          return;
+        }
         throw new Error(body?.error || error.message);
       }
       if (data?.error) throw new Error(data.error);
@@ -123,6 +132,10 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
 
       if (error) {
         const body = await parseFunctionErrorBody(error);
+        if (body?.error === 'linkedin_reauth_required') {
+          setReauthAccountId((body.account_id as string) ?? null);
+          return;
+        }
         throw new Error(body?.error || error.message);
       }
       if (data?.error) throw new Error(data.error);
@@ -198,6 +211,13 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
   const selectedCount   = selected.size;
 
   return (
+    <>
+    <LinkedInConnectDialog
+      open={reconnectOpen}
+      onOpenChange={setReconnectOpen}
+      reconnectAccountId={reauthAccountId ?? undefined}
+      onSuccess={() => { setReauthAccountId(null); setReconnectOpen(false); }}
+    />
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader>
@@ -206,6 +226,18 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
             Collez l'URL d'une recherche ou d'une liste Sales Navigator.
           </DialogDescription>
         </DialogHeader>
+
+        {reauthAccountId && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <span className="flex items-center gap-2">
+              <Linkedin className="h-4 w-4 shrink-0" />
+              Votre session Sales Navigator a expiré côté LinkedIn.
+            </span>
+            <Button size="sm" variant="outline" className="shrink-0 bg-white" onClick={() => setReconnectOpen(true)}>
+              Reconnecter LinkedIn
+            </Button>
+          </div>
+        )}
 
         {/* Quota bar */}
         <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-xs">
@@ -378,5 +410,6 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

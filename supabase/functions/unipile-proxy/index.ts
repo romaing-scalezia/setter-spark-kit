@@ -280,6 +280,62 @@ serve(async (req) => {
         return jsonResponse({ object: "AccountCreated", account_id: data.account_id });
       }
 
+      case "reconnect_account": {
+        // Reconnecte le MEME account_id Unipile (POST /api/v1/accounts/{id}) au lieu
+        // d'en creer un nouveau — sinon l'utilisateur perd l'historique de sa boite
+        // de reception (inbox liee au vieil account_id).
+        const { account_id, username, password } = body;
+        if (!account_id || !username || !password) {
+          return jsonResponse({ error: "Missing 'account_id', 'username' or 'password'" }, 400);
+        }
+        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+          ?? JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").service_role;
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const admin0 = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        // L'account_id doit appartenir a l'utilisateur qui fait la demande.
+        const { data: owned } = await admin0
+          .from("unipile_accounts")
+          .select("account_id")
+          .eq("user_id", userId)
+          .eq("account_id", account_id)
+          .maybeSingle();
+        if (!owned) {
+          return jsonResponse({ error: "account_id does not belong to this user" }, 403);
+        }
+
+        const res = await fetch(`${UNIPILE_BASE_URL}/api/v1/accounts/${account_id}`, {
+          method: "POST",
+          headers: {
+            "X-API-KEY": apiKey,
+            "accept": "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ provider: "LINKEDIN", username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          return jsonResponse({ error: "Unipile error", details: data }, res.status);
+        }
+
+        if (data?.object === "Checkpoint") {
+          await admin0.from("unipile_accounts").upsert(
+            { user_id: userId, account_id, status: "connecting", updated_at: new Date().toISOString() },
+            { onConflict: "user_id" },
+          );
+          return jsonResponse(data);
+        }
+
+        await admin0.from("unipile_accounts").upsert(
+          { user_id: userId, account_id: data.account_id ?? account_id, status: "connected", updated_at: new Date().toISOString() },
+          { onConflict: "user_id" },
+        );
+        return jsonResponse({ object: "AccountReconnected", account_id: data.account_id ?? account_id });
+      }
+
       case "solve_checkpoint": {
         const { account_id, code } = body;
         if (!account_id || !code) {

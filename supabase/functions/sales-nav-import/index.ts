@@ -95,6 +95,16 @@ serve(async (req) => {
         if (!searchRes.ok) {
           const err = await searchRes.text();
           console.error("[sales-nav-import] Unipile search error:", err);
+
+          // Session Sales Navigator expirée côté Unipile (distincte de la connexion
+          // LinkedIn générale, qui peut rester "connected" — voir /users/me.sales_navigator).
+          // On le signale precisement pour proposer une reconnexion cablee sur le meme
+          // account_id plutot qu'un message generique inexploitable.
+          const looksExpired = searchRes.status === 401 || /expired_credentials/i.test(err);
+          if (looksExpired) {
+            return jsonResponse({ error: "linkedin_reauth_required", account_id: account.account_id }, 400);
+          }
+
           return jsonResponse({ error: "unipile_error", details: err }, 400);
         }
 

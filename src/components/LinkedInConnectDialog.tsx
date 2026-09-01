@@ -23,6 +23,9 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  // Fourni : reconnecte ce compte Unipile existant (POST /accounts/{id}) au lieu
+  // d'en créer un nouveau — préserve l'inbox déjà liée à ce compte.
+  reconnectAccountId?: string;
 }
 
 const LinkedInLogo = () => (
@@ -33,7 +36,7 @@ const LinkedInLogo = () => (
   </div>
 );
 
-export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) {
+export function LinkedInConnectDialog({ open, onOpenChange, onSuccess, reconnectAccountId }: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -138,14 +141,16 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('unipile-proxy', {
-        body: { action: 'create_account', username: email, password },
+        body: reconnectAccountId
+          ? { action: 'reconnect_account', account_id: reconnectAccountId, username: email, password }
+          : { action: 'create_account', username: email, password },
       });
       if (error) throw new Error(error.message);
       const d = data as any;
-      if (d?.object === 'AccountCreated') {
+      if (d?.object === 'AccountCreated' || d?.object === 'AccountReconnected') {
         handleSuccess();
       } else if (d?.object === 'Checkpoint') {
-        enterCheckpoint(d.checkpoint?.type as CheckpointType, d.account_id);
+        enterCheckpoint(d.checkpoint?.type as CheckpointType, d.account_id ?? reconnectAccountId);
       } else {
         throw new Error(d?.details?.message ?? d?.error ?? 'Identifiants incorrects ou réponse inattendue.');
       }
@@ -232,8 +237,12 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess }: Props) 
           <>
             <DialogHeader className="items-center text-center">
               <LinkedInLogo />
-              <DialogTitle className="text-xl font-bold">Se connecter avec LinkedIn</DialogTitle>
-              <DialogDescription>Saisissez les identifiants de votre compte LinkedIn.</DialogDescription>
+              <DialogTitle className="text-xl font-bold">{reconnectAccountId ? 'Reconnecter LinkedIn' : 'Se connecter avec LinkedIn'}</DialogTitle>
+              <DialogDescription>
+                {reconnectAccountId
+                  ? 'Saisissez à nouveau vos identifiants LinkedIn pour rétablir la connexion — votre boîte de réception reste intacte.'
+                  : 'Saisissez les identifiants de votre compte LinkedIn.'}
+              </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleConnect} className="space-y-4 pt-2">
