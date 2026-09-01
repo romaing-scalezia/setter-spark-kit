@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const periodEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
         const { data: created } = await (supabase as any)
           .from('memberships')
-          .insert({ user_id: userId, plan: 'free', status: 'active', current_period_start: periodStart, current_period_end: periodEnd })
+          .insert({ user_id: userId, plan: 'free', status: 'trialing', current_period_start: periodStart, current_period_end: periodEnd })
           .select('plan, status, current_period_end')
           .single();
         membership = created;
