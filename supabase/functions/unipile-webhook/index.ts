@@ -114,8 +114,12 @@ serve(async (req) => {
               });
               if (meRes.ok) {
                 const meData = await meRes.json();
+                // meData.sales_navigator est un objet meme deconnecte
+                // ({ error: "DISCONNECTED" }), donc toujours "truthy" — il faut
+                // verifier l'absence d'erreur, pas juste la presence de la cle.
+                const salesNav = meData?.sales_navigator;
                 hasSalesNav = !!(
-                  meData?.sales_navigator ||
+                  (salesNav && !salesNav.error) ||
                   meData?.premium_subscriber === true ||
                   meData?.subscriptions?.some((s: any) =>
                     typeof s === "string"
