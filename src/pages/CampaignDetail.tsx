@@ -1,9 +1,21 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaignDetail } from '@/hooks/useCampaignDetail';
@@ -38,7 +50,9 @@ function leadName(lead: CampaignLead) {
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { detail, isLoading, toggleStatus } = useCampaignDetail(id);
+  const { detail, isLoading, toggleStatus, deleteLeads } = useCampaignDetail(id);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -71,6 +85,18 @@ export default function CampaignDetail() {
     : 0;
 
   const canToggle = detail.status === 'active' || detail.status === 'paused';
+
+  const allSelected = totalLeads > 0 && selectedIds.size === totalLeads;
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(leads.map((l) => l.id)));
+  const toggleOne = (leadId: string) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(leadId)) next.delete(leadId); else next.add(leadId);
+    return next;
+  });
+  const confirmDelete = () => {
+    deleteLeads.mutate(Array.from(selectedIds), { onSuccess: () => setSelectedIds(new Set()) });
+    setDeleteConfirmOpen(false);
+  };
 
   return (
     <AppLayout>
@@ -140,7 +166,20 @@ export default function CampaignDetail() {
 
         {/* Leads table */}
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-foreground">Leads ({totalLeads})</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Leads ({totalLeads})</h2>
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteLeads.isPending}
+              >
+                {deleteLeads.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Trash2 className="h-3.5 w-3.5 mr-1.5" />}
+                Supprimer ({selectedIds.size})
+              </Button>
+            )}
+          </div>
 
           {totalLeads === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 flex items-center justify-center py-10">
@@ -151,6 +190,9 @@ export default function CampaignDetail() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-10">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Tout sélectionner" />
+                    </TableHead>
                     <TableHead>Lead</TableHead>
                     <TableHead>Entreprise</TableHead>
                     <TableHead>Statut</TableHead>
@@ -179,6 +221,13 @@ export default function CampaignDetail() {
                 <TableBody>
                   {leads.map((lead) => (
                     <TableRow key={lead.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={() => toggleOne(lead.id)}
+                          aria-label={`Sélectionner ${leadName(lead)}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="text-sm font-medium text-foreground">{leadName(lead)}</p>
@@ -239,6 +288,21 @@ export default function CampaignDetail() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer {selectedIds.size} prospect{selectedIds.size > 1 ? 's' : ''} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Tout job en attente (visite, invitation, message) pour {selectedIds.size > 1 ? 'ces prospects' : 'ce prospect'} sera annulé.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Supprimer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

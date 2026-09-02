@@ -3,6 +3,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,6 +73,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
   const [currentUrl, setCurrentUrl]   = useState<string>('');
   const [reauthAccountId, setReauthAccountId] = useState<string | null>(null);
   const [reconnectOpen, setReconnectOpen]     = useState(false);
+  const [pendingImport, setPendingImport]     = useState<Prospect[] | null>(null);
 
   const reset = () => {
     setUrl('');
@@ -72,6 +83,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
     setNextCursor(null);
     setCurrentUrl('');
     setReauthAccountId(null);
+    setPendingImport(null);
   };
 
   const handleClose = () => {
@@ -165,6 +177,16 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
   };
 
   // ── Import ───────────────────────────────────────────────────
+  const finalizeImport = (toImport: Prospect[]) => {
+    // Le quota est décrémenté au lancement de la campagne, pas ici
+    toast({
+      title: `${toImport.length} prospect${toImport.length > 1 ? 's' : ''} ajouté${toImport.length > 1 ? 's' : ''}`,
+      description: 'Ils seront importés dans la campagne au lancement.',
+    });
+    onImported(toImport as SalesNavProspect[]);
+    handleClose();
+  };
+
   const handleImport = async () => {
     const toImport = prospects.filter(
       (p) => p.linkedin_url && selected.has(p.linkedin_url) && p.status !== 'in_campaign',
@@ -180,13 +202,16 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
       return;
     }
 
-    // Le quota est décrémenté au lancement de la campagne, pas ici
-    toast({
-      title: `${toImport.length} prospect${toImport.length > 1 ? 's' : ''} ajouté${toImport.length > 1 ? 's' : ''}`,
-      description: 'Ils seront importés dans la campagne au lancement.',
-    });
-    onImported(toImport as SalesNavProspect[]);
-    handleClose();
+    // Prospects déjà présents dans le CRM — potentiellement déjà contactés
+    // manuellement. La campagne ne le sait pas (campaign_leads est un suivi
+    // indépendant) et enverrait quand même visite/invitation/message.
+    const alreadyInCrm = toImport.filter((p) => p.status === 'in_crm');
+    if (alreadyInCrm.length > 0) {
+      setPendingImport(toImport);
+      return;
+    }
+
+    finalizeImport(toImport);
   };
 
   const toggleSelect = (linkedinUrl: string, status: string) => {
@@ -212,6 +237,22 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
 
   return (
     <>
+    <AlertDialog open={!!pendingImport} onOpenChange={(o) => !o && setPendingImport(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Prospects déjà dans votre CRM</AlertDialogTitle>
+          <AlertDialogDescription>
+            {pendingImport?.filter((p) => p.status === 'in_crm').length} des prospects sélectionnés {pendingImport && pendingImport.filter((p) => p.status === 'in_crm').length > 1 ? 'sont déjà des leads' : 'est déjà un lead'} dans votre CRM — vous les avez peut-être déjà contactés. La campagne ne le saura pas et leur enverra quand même la séquence complète (visite, invitation, message) depuis le début.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { if (pendingImport) finalizeImport(pendingImport); setPendingImport(null); }}>
+            Ajouter quand même
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <LinkedInConnectDialog
       open={reconnectOpen}
       onOpenChange={setReconnectOpen}

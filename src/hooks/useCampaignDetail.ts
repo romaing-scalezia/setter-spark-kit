@@ -116,5 +116,19 @@ export function useCampaignDetail(id: string | undefined) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['campaign-detail', id] }),
   });
 
-  return { detail: query.data, isLoading: query.isLoading, toggleStatus };
+  const deleteLeads = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      if (!leadIds.length) return;
+      // campaign_jobs.campaign_lead_id est ON DELETE CASCADE — supprime aussi
+      // les jobs en attente pour ces prospects, pas de nettoyage manuel requis.
+      const { error } = await (supabase as any)
+        .from('campaign_leads')
+        .delete()
+        .in('id', leadIds);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaign-detail', id] }),
+  });
+
+  return { detail: query.data, isLoading: query.isLoading, toggleStatus, deleteLeads };
 }
