@@ -26,6 +26,7 @@ export function LinkedInIntegrationCard() {
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [reconnectOpen, setReconnectOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +87,12 @@ export function LinkedInIntegrationCard() {
       onOpenChange={setConnectOpen}
       onSuccess={refetch}
     />
+    <LinkedInConnectDialog
+      open={reconnectOpen}
+      onOpenChange={setReconnectOpen}
+      reconnectAccountId={account?.account_id}
+      onSuccess={refetch}
+    />
     <Card data-testid="settings-linkedin-card">
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
@@ -113,26 +120,33 @@ export function LinkedInIntegrationCard() {
                 </p>
               </div>
             </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={busy} data-testid="settings-linkedin-disconnect">
-                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Déconnecter
+            <div className="flex items-center gap-2">
+              {!isConnected && (
+                <Button size="sm" onClick={() => setReconnectOpen(true)} disabled={busy} data-testid="settings-linkedin-reconnect">
+                  Reconnecter
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Déconnecter LinkedIn ?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Vous devrez reconnecter votre compte pour synchroniser à nouveau vos conversations.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Annuler</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDisconnect}>Déconnecter</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={busy} data-testid="settings-linkedin-disconnect">
+                    {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Déconnecter
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Déconnecter LinkedIn ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Vous devrez reconnecter votre compte pour synchroniser à nouveau vos conversations.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDisconnect}>Déconnecter</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         ) : (
           <Button onClick={handleConnect} disabled={busy} data-testid="settings-linkedin-connect">
