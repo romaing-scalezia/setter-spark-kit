@@ -73,7 +73,7 @@ serve(async (req) => {
       { data: campaignCounts },
     ] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type, has_sales_nav"),
-      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at"),
+      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("coach_assignments").select("*"),
       supabaseAdmin.from("unipile_accounts" as any).select("user_id, status, account_id"),
@@ -185,7 +185,7 @@ serve(async (req) => {
       const mrrCents = isPaid ? (live?.amountCents ?? 0) : 0;
 
       const campaignCounts = campaignCountsMap.get(u.id) ?? {};
-      const prospectQuota = PROSPECT_QUOTA[membership?.plan ?? "free"] ?? 0;
+      const prospectQuota = membership?.prospects_import_quota_override ?? PROSPECT_QUOTA[membership?.plan ?? "free"] ?? 0;
 
       return {
         id: u.id,

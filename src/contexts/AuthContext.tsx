@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const [rolesRes, profileRes, membershipRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
         supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source, product_tour_seen, has_sales_nav').eq('id', userId).single(),
-        (supabase as any).from('memberships').select('plan, status, current_period_end, prospects_imported_count, prospects_imported_reset_at').eq('user_id', userId).maybeSingle(),
+        (supabase as any).from('memberships').select('plan, status, current_period_end, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (rolesRes.data?.role) {
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const quotaMap: Record<string, number> = { free: 400, starter: 400, pro: 2000, coach: 0 };
       const planKey = (membership?.plan as string) ?? 'free';
-      const total = quotaMap[planKey] ?? 0;
+      const total = (membership as any)?.prospects_import_quota_override ?? quotaMap[planKey] ?? 0;
       const used = membership?.prospects_imported_count ?? 0;
       setProspectQuota({ used, total, remaining: Math.max(0, total - used), resetAt: membership?.prospects_imported_reset_at ?? null });
     } catch (err) {

@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Shield, Users, Loader2, Trash2, Plus, UserPlus, Search,
   Eye, Linkedin, AlertTriangle, TrendingUp, Clock, CheckCircle2,
-  Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2,
+  Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2, Gauge,
 } from 'lucide-react';
 import type { AppRole } from '@/lib/constants';
 import { format, differenceInDays } from 'date-fns';
@@ -109,6 +109,7 @@ export default function AdminPage() {
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<AppRole>('user');
   const [extendDays, setExtendDays] = useState('14');
+  const [quotaInput, setQuotaInput] = useState('');
   const [extendingUser, setExtendingUser] = useState<EnrichedUser | null>(null);
   const [selectedCoach, setSelectedCoach] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
@@ -222,6 +223,22 @@ export default function AdminPage() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast({ title: `Essai étendu de ${extendDays} jours` }); setExtendingUser(null); },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const setQuotaOverride = useMutation({
+    mutationFn: async ({ userId, quota }: { userId: string; quota: number | null }) => {
+      const { error } = await (supabase as any)
+        .from('memberships')
+        .update({ prospects_import_quota_override: quota })
+        .eq('user_id', userId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, { quota }) => {
+      invalidate();
+      setQuotaInput('');
+      toast({ title: quota === null ? 'Quota Sales Nav réinitialisé (retour au plan)' : `Quota Sales Nav fixé à ${quota}` });
+    },
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
   });
 
@@ -885,6 +902,37 @@ export default function AdminPage() {
                     <Button size="sm" variant="outline" className="flex-1" onClick={() => extendTrial.mutate({ userId: selectedUser.id, days: parseInt(extendDays) })} disabled={extendTrial.isPending}>
                       {extendTrial.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                       <CalendarPlus className="h-3.5 w-3.5 mr-1.5" /> Étendre l'essai (jours)
+                    </Button>
+                  </div>
+
+                  {/* Quota Sales Nav personnalisé */}
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      value={quotaInput}
+                      onChange={e => setQuotaInput(e.target.value)}
+                      placeholder={`Actuel : ${selectedUser.sales_nav_import.quota}`}
+                      className="w-24 h-8 text-sm"
+                      min="0"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => quotaInput !== '' && setQuotaOverride.mutate({ userId: selectedUser.id, quota: parseInt(quotaInput) })}
+                      disabled={setQuotaOverride.isPending || quotaInput === ''}
+                    >
+                      {setQuotaOverride.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      <Gauge className="h-3.5 w-3.5 mr-1.5" /> Fixer quota Sales Nav
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setQuotaOverride.mutate({ userId: selectedUser.id, quota: null })}
+                      disabled={setQuotaOverride.isPending}
+                      title="Réinitialiser au quota du plan"
+                    >
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
 
