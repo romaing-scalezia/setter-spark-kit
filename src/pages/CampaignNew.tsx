@@ -242,7 +242,7 @@ export default function CampaignNew() {
   const navigate = useNavigate();
   const { id: editId } = useParams<{ id: string }>();
   const isEditMode = !!editId;
-  const { user, hasSalesNav } = useAuth();
+  const { user, hasSalesNav, activeRole } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { account: unipileAccount, loading: unipileLoading } = useUnipileAccount();
@@ -272,6 +272,8 @@ export default function CampaignNew() {
   const [showMappingModal, setShowMappingModal] = useState(false);
   const [showSalesNavModal, setShowSalesNavModal] = useState(false);
   const [salesNavCount, setSalesNavCount] = useState(0);
+  const [showListImportModal, setShowListImportModal] = useState(false);
+  const [selectedListId, setSelectedListId] = useState('');
   const fileInputRef                    = useRef<HTMLInputElement>(null);
   const taRefs                          = useRef<(HTMLTextAreaElement | null)[]>([]);
 
@@ -350,6 +352,43 @@ export default function CampaignNew() {
     enabled: !!user,
     staleTime: 60_000,
   });
+
+  const { data: prospectLists = [] } = useQuery({
+    queryKey: ['prospect-lists-picker', user?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('prospect_lists').select('id, name').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+    enabled: !!user && activeRole === 'admin',
+    staleTime: 60_000,
+  });
+
+  const { data: selectedListItems = [] } = useQuery({
+    queryKey: ['prospect-list-items-picker', selectedListId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('prospect_list_items').select('linkedin_url, first_name, last_name, company_name').eq('list_id', selectedListId);
+      if (error) throw error;
+      return (data ?? []) as { linkedin_url: string; first_name: string | null; last_name: string | null; company_name: string | null }[];
+    },
+    enabled: !!selectedListId,
+  });
+
+  function importFromList() {
+    const mapped: CsvLead[] = selectedListItems.map((p) => ({
+      linkedin_url: p.linkedin_url ?? '',
+      first_name:   p.first_name ?? '',
+      last_name:    p.last_name ?? '',
+      company_name: p.company_name ?? '',
+    }));
+    setCsvLeads((prev) => {
+      const existing = new Set(prev.map((l) => l.linkedin_url));
+      const fresh = mapped.filter((l) => l.linkedin_url && !existing.has(l.linkedin_url));
+      return [...prev, ...fresh];
+    });
+    setShowListImportModal(false);
+    setSelectedListId('');
+  }
 
   /* ─── Step config helpers ─── */
   function updateStep(index: number, field: 'message_content' | 'delay_days', value: string | number) {
@@ -854,6 +893,22 @@ export default function CampaignNew() {
               )}
             </div>
 
+            {activeRole === 'admin' && (
+              <div className="space-y-2">
+                <Label>Importer depuis une liste (Recherche Apollo)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={prospectLists.length === 0}
+                  onClick={() => setShowListImportModal(true)}
+                >
+                  <Upload className="h-4 w-4" />
+                  {prospectLists.length === 0 ? 'Aucune liste disponible' : 'Importer depuis une liste'}
+                </Button>
+              </div>
+            )}
+
             <div className="relative flex items-center gap-3">
               <div className="flex-1 border-t border-border" />
               <span className="text-xs text-muted-foreground">ou</span>
@@ -1127,6 +1182,25 @@ export default function CampaignNew() {
           setShowSalesNavModal(false);
         }}
       />
+
+      <Dialog open={showListImportModal} onOpenChange={setShowListImportModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importer depuis une liste</DialogTitle>
+            <DialogDescription>Choisis une liste construite dans Recherche.</DialogDescription>
+          </DialogHeader>
+          <Select value={selectedListId} onValueChange={setSelectedListId}>
+            <SelectTrigger><SelectValue placeholder="Choisir une liste" /></SelectTrigger>
+            <SelectContent>
+              {prospectLists.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowListImportModal(false)}>Annuler</Button>
+            <Button disabled={!selectedListId} onClick={importFromList}>Importer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

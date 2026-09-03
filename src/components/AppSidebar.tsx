@@ -22,6 +22,7 @@ const DUO: Record<string, string> = {
   settings: `<circle class="fill" cx="12" cy="12" r="3.2"/><circle class="ln" cx="12" cy="12" r="3.2"/><path class="ln" d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>`,
   megaphone: `<circle class="fill" cx="18" cy="12" r="2.6"/><circle class="ln" cx="5.5" cy="6.5" r="2.2"/><circle class="ln" cx="5.5" cy="17.5" r="2.2"/><circle class="ln" cx="18" cy="12" r="2.6"/><path class="ln" d="M7.6 7.2 15.4 11M7.6 16.8 15.4 13"/>`,
   supervision: `<rect class="fill" x="3" y="6" width="18" height="12" rx="3"/><rect class="ln" x="3" y="6" width="18" height="12" rx="3"/><path class="ln" d="M2.6 12C4.6 8.5 8 6.5 12 6.5S19.4 8.5 21.4 12C19.4 15.5 16 17.5 12 17.5S4.6 15.5 2.6 12Z"/><circle class="ln" cx="12" cy="12" r="2.8"/>`,
+  search: `<circle class="fill" cx="11" cy="11" r="6.5"/><circle class="ln" cx="11" cy="11" r="6.5"/><path class="ln" d="m20 20-3.8-3.8"/>`,
 };
 
 function DuoIcon({ name, className = '' }: { name: string; className?: string }) {
@@ -60,6 +61,7 @@ const navMain: NavDef[] = [
   { title: 'Leads',      url: '/leads',       icon: 'leads',     roles: ['user', 'coach', 'admin'], tour: 'leads' },
   { title: 'Follow-ups', url: '/follow-ups',  icon: 'clock',     roles: ['user', 'coach', 'admin'], tour: 'followup' },
   { title: 'Supervision', url: '/coach',      icon: 'supervision', roles: ['coach'] },
+  { title: 'Recherche',  url: '/recherche',   icon: 'search',    roles: ['admin'] },
 ];
 
 const navResources: NavDef[] = [

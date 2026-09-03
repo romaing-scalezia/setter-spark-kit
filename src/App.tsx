@@ -23,6 +23,7 @@ import AdminPage from "./pages/Admin";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminAssignments from "./pages/AdminAssignments";
 import AdminTeams from "./pages/AdminTeams";
+import RecherchePage from "./pages/Recherche";
 import SettingsPage from "./pages/Settings";
 import WorkspacePage from "./pages/Workspace";
 import LeaderboardPage from "./pages/Leaderboard";
@@ -115,6 +116,7 @@ const App = () => (
             <Route path="/admin/analytics" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminAnalytics /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/assignments" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminAssignments /></AuthGuard></OnboardingGuard>} />
             <Route path="/admin/teams" element={<OnboardingGuard><AuthGuard requiredRole="admin"><AdminTeams /></AuthGuard></OnboardingGuard>} />
+            <Route path="/recherche" element={<OnboardingGuard><AuthGuard requiredRole="admin"><RecherchePage /></AuthGuard></OnboardingGuard>} />
             <Route path="/settings" element={<OnboardingGuard><AuthGuard><TrialGuard><SettingsPage /></TrialGuard></AuthGuard></OnboardingGuard>} />
             <Route path="/workspace" element={<Navigate to="/settings?tab=workspace" replace />} />
             <Route path="/billing" element={<Navigate to="/settings?tab=facturation" replace />} />
