@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { parseFunctionErrorBody } from '@/lib/functionsError';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
@@ -18,6 +19,14 @@ type Step = 'credentials' | 'checkpoint';
 type CheckpointType = '2FA' | 'OTP' | 'IN_APP_VALIDATION' | 'PHONE_REGISTER';
 
 const CHECKPOINT_TIMEOUT_S = 5 * 60;
+
+// unipile-proxy renvoie { error: "Unipile error", details: <reponse brute Unipile> }
+// sur un echec — Unipile decrit l'erreur dans details.detail/details.title, pas
+// dans un champ "message" (contrairement au fallback historique de ce fichier).
+async function unipileErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const body = await parseFunctionErrorBody(error) as { error?: string; details?: { detail?: string; title?: string } } | null;
+  return body?.details?.detail ?? body?.details?.title ?? body?.error ?? fallback;
+}
 
 interface Props {
   open: boolean;
@@ -145,7 +154,7 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess, reconnect
           ? { action: 'reconnect_account', account_id: reconnectAccountId, username: email, password }
           : { action: 'create_account', username: email, password },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await unipileErrorMessage(error, 'Identifiants incorrects ou réponse inattendue.'));
       const d = data as any;
       if (d?.object === 'AccountCreated' || d?.object === 'AccountReconnected') {
         handleSuccess();
@@ -170,7 +179,7 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess, reconnect
       const { data, error } = await supabase.functions.invoke('unipile-proxy', {
         body: { action: 'solve_checkpoint', account_id: accountId, code },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await unipileErrorMessage(error, 'Code incorrect ou expiré.'));
       const d = data as any;
       if (d?.object === 'AccountCreated') {
         handleSuccess();
@@ -206,7 +215,7 @@ export function LinkedInConnectDialog({ open, onOpenChange, onSuccess, reconnect
       const { data, error } = await supabase.functions.invoke('unipile-proxy', {
         body: { action: 'solve_checkpoint', account_id: accountId, code: 'TRY_ANOTHER_WAY' },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(await unipileErrorMessage(error, error.message));
       const d = data as any;
       if (d?.object === 'Checkpoint') {
         stopPolling();
