@@ -70,6 +70,20 @@ const SENIORITIES: { value: string; label: string }[] = [
   { value: 'intern', label: 'Stagiaire' },
 ];
 
+const EMPLOYEE_RANGES: { value: string; label: string }[] = [
+  { value: '1,10', label: '1-10' },
+  { value: '11,20', label: '11-20' },
+  { value: '21,50', label: '21-50' },
+  { value: '51,100', label: '51-100' },
+  { value: '101,200', label: '101-200' },
+  { value: '201,500', label: '201-500' },
+  { value: '501,1000', label: '501-1000' },
+  { value: '1001,2000', label: '1001-2000' },
+  { value: '2001,5000', label: '2001-5000' },
+  { value: '5001,10000', label: '5001-10000' },
+  { value: '10001,', label: '10001+' },
+];
+
 async function callApolloFn(name: string, body: object) {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
@@ -289,8 +303,16 @@ export function RechercheContent() {
                 <Input value={orgLocationsInput} onChange={(e) => setOrgLocationsInput(e.target.value)} placeholder="France" className="text-xs h-8" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Taille entreprise (min,max)</Label>
-                <Input value={employeeRangeInput} onChange={(e) => setEmployeeRangeInput(e.target.value)} placeholder="10,200" className="text-xs h-8" />
+                <Label className="text-xs">Taille entreprise</Label>
+                <Select value={employeeRangeInput || '__any__'} onValueChange={(v) => setEmployeeRangeInput(v === '__any__' ? '' : v)}>
+                  <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">Toutes tailles</SelectItem>
+                    {EMPLOYEE_RANGES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Mots-clés</Label>
