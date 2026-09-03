@@ -26,6 +26,7 @@ const APOLLO_FILTERS_TOOL = {
     type: "object",
     properties: {
       person_titles: { type: "array", items: { type: "string" }, description: "Job titles to search for, e.g. 'sales director'" },
+      person_not_titles: { type: "array", items: { type: "string" }, description: "Job titles to explicitly exclude from results" },
       person_seniorities: {
         type: "array",
         items: { type: "string", enum: ["owner", "founder", "c_suite", "partner", "vp", "head", "director", "manager", "senior", "entry", "intern"] },

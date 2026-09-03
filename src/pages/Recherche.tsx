@@ -31,6 +31,7 @@ interface ApolloPerson {
 
 interface ApolloFilters {
   person_titles?: string[];
+  person_not_titles?: string[];
   person_seniorities?: string[];
   person_locations?: string[];
   organization_locations?: string[];
@@ -55,7 +56,19 @@ interface ProspectListItem {
   email: string | null;
 }
 
-const SENIORITIES = ['owner', 'founder', 'c_suite', 'partner', 'vp', 'head', 'director', 'manager', 'senior', 'entry', 'intern'];
+const SENIORITIES: { value: string; label: string }[] = [
+  { value: 'owner', label: 'Propriétaire' },
+  { value: 'founder', label: 'Fondateur' },
+  { value: 'c_suite', label: 'Direction (C-level)' },
+  { value: 'partner', label: 'Associé' },
+  { value: 'vp', label: 'Vice-président' },
+  { value: 'head', label: 'Responsable' },
+  { value: 'director', label: 'Directeur' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'senior', label: 'Senior' },
+  { value: 'entry', label: 'Débutant' },
+  { value: 'intern', label: 'Stagiaire' },
+];
 
 async function callApolloFn(name: string, body: object) {
   const { data, error } = await supabase.functions.invoke(name, { body });
@@ -76,7 +89,8 @@ export function RechercheContent() {
   // ── Recherche ────────────────────────────────────────────────
   const [naturalQuery, setNaturalQuery] = useState('');
   const [titlesInput, setTitlesInput] = useState('');
-  const [seniorities, setSeniorities] = useState<Set<string>>(new Set());
+  const [excludeTitlesInput, setExcludeTitlesInput] = useState('');
+  const [seniority, setSeniority] = useState('');
   const [personLocationsInput, setPersonLocationsInput] = useState('');
   const [orgLocationsInput, setOrgLocationsInput] = useState('');
   const [keywordsInput, setKeywordsInput] = useState('');
@@ -89,7 +103,8 @@ export function RechercheContent() {
 
   const syncInputsFromFilters = (f: ApolloFilters) => {
     setTitlesInput((f.person_titles ?? []).join(', '));
-    setSeniorities(new Set(f.person_seniorities ?? []));
+    setExcludeTitlesInput((f.person_not_titles ?? []).join(', '));
+    setSeniority((f.person_seniorities ?? [])[0] ?? '');
     setPersonLocationsInput((f.person_locations ?? []).join(', '));
     setOrgLocationsInput((f.organization_locations ?? []).join(', '));
     setKeywordsInput(f.q_keywords ?? '');
@@ -100,7 +115,8 @@ export function RechercheContent() {
     const f: ApolloFilters = {};
     const split = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
     if (titlesInput.trim()) f.person_titles = split(titlesInput);
-    if (seniorities.size > 0) f.person_seniorities = Array.from(seniorities);
+    if (excludeTitlesInput.trim()) f.person_not_titles = split(excludeTitlesInput);
+    if (seniority) f.person_seniorities = [seniority];
     if (personLocationsInput.trim()) f.person_locations = split(personLocationsInput);
     if (orgLocationsInput.trim()) f.organization_locations = split(orgLocationsInput);
     if (keywordsInput.trim()) f.q_keywords = keywordsInput.trim();
@@ -129,14 +145,6 @@ export function RechercheContent() {
   const handleManualSearch = (targetPage = 1) => {
     setPage(targetPage);
     runSearch.mutate({ filters: buildFiltersFromInputs(), targetPage });
-  };
-
-  const toggleSeniority = (s: string) => {
-    setSeniorities((prev) => {
-      const next = new Set(prev);
-      if (next.has(s)) next.delete(s); else next.add(s);
-      return next;
-    });
   };
 
   const toggleSelect = (id: string) => {
@@ -257,19 +265,20 @@ export function RechercheContent() {
                 <Input value={titlesInput} onChange={(e) => setTitlesInput(e.target.value)} placeholder="sales director, VP sales" className="text-xs h-8" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Ancienneté</Label>
-                <div className="flex flex-wrap gap-1">
-                  {SENIORITIES.map((s) => (
-                    <Badge
-                      key={s}
-                      variant={seniorities.has(s) ? 'default' : 'outline'}
-                      className="cursor-pointer text-[10px]"
-                      onClick={() => toggleSeniority(s)}
-                    >
-                      {s}
-                    </Badge>
-                  ))}
-                </div>
+                <Label className="text-xs">Exclure des postes (séparés par virgule)</Label>
+                <Input value={excludeTitlesInput} onChange={(e) => setExcludeTitlesInput(e.target.value)} placeholder="assistant, stagiaire" className="text-xs h-8" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Niveau hiérarchique</Label>
+                <Select value={seniority || '__any__'} onValueChange={(v) => setSeniority(v === '__any__' ? '' : v)}>
+                  <SelectTrigger className="text-xs h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">Tous niveaux</SelectItem>
+                    {SENIORITIES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Localisation (personne)</Label>
