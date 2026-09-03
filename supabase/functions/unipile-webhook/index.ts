@@ -180,12 +180,16 @@ serve(async (req) => {
         if (senderProviderId) {
           const now = new Date().toISOString();
 
-          // Récupère les leads concernés
+          // Récupère les leads concernés. On exigeait auparavant messaged_1_at
+          // non nul, mais une note d'invitation (message joint à la demande de
+          // connexion) peut recevoir une réponse avant même l'envoi de
+          // message_1 — cette réponse n'était alors jamais comptabilisée.
+          // invited_at suffit : le prospect a bien été contacté par la campagne.
           const { data: matchedLeads } = await admin
             .from("campaign_leads")
             .select("id")
             .eq("provider_id", senderProviderId)
-            .not("messaged_1_at", "is", null)
+            .not("invited_at", "is", null)
             .is("replied_at", null);
 
           if (matchedLeads && matchedLeads.length > 0) {
