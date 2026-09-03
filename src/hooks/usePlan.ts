@@ -16,8 +16,8 @@ export function usePlan() {
   // Peut accéder à l'app : trial en cours OU abonnement actif OU rôle privilégié
   const canAccess = isPrivilegedRole || isActive || (isTrialing && !trialExpired);
 
-  // Accès aux features StarterPack (leaderboard, notes coach) : rôle privilégié OU source starterpack
-  const hasStarterAccess = isPrivilegedRole || profile?.source === 'starterpack';
+  // Accès aux features StarterPack (leaderboard, notes coach) : rôle privilégié OU offre active accordant cet accès
+  const hasStarterAccess = isPrivilegedRole || !!profile?.has_starter_offer_access;
 
   return { plan, membershipStatus, isTrialing, trialExpired, trialDaysLeft, isActive, canAccess, hasStarterAccess };
 }

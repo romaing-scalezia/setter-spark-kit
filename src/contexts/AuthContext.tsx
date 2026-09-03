@@ -14,6 +14,7 @@ type ProfileData = {
   onboarding_completed: boolean;
   source: string | null;
   product_tour_seen: boolean;
+  has_starter_offer_access: boolean;
 };
 
 type ProspectQuota = {
@@ -55,20 +56,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
-  const fetchUserData = useCallback(async (userId: string, fullName?: string | null, source?: string | null) => {
+  const fetchUserData = useCallback(async (userId: string, fullName?: string | null) => {
     try {
+      // Le source d'inscription (metadata JWT) est ecrit directement en base
+      // par bootstrap_current_user — pas besoin de le repasser cote client.
       await supabase.rpc('bootstrap_current_user', { _full_name: fullName ?? null });
 
-      // Persist source from signup URL if provided and profile doesn't have one yet
-      if (source && source !== 'organic') {
-        await (supabase as any).from('profiles').update({ source }).eq('id', userId).is('source', null);
-      }
-
-      const [rolesRes, profileRes, membershipRes] = await Promise.all([
+      const [rolesRes, profileRes, membershipRes, offersRes] = await Promise.all([
         supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
         supabase.from('profiles').select('full_name, email, role, debug_role_switch_enabled, onboarding_completed, source, product_tour_seen, has_sales_nav').eq('id', userId).single(),
         (supabase as any).from('memberships').select('plan, status, current_period_end, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override').eq('user_id', userId).maybeSingle(),
+        (supabase as any).from('offers').select('slug, grants_starter_access, active'),
       ]);
+
+      const offersMap = new Map<string, { grants_starter_access: boolean; active: boolean }>(
+        (offersRes?.data ?? []).map((o: any) => [o.slug, o]),
+      );
 
       if (rolesRes.data?.role) {
         setRoles([rolesRes.data.role as AppRole]);
@@ -79,14 +82,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (profileRes.data) {
+        const src = (profileRes.data as any).source ?? null;
+        const offer = src ? offersMap.get(src) : undefined;
         setProfile({
           full_name: profileRes.data.full_name,
           email: profileRes.data.email,
           role: profileRes.data.role as AppRole | null,
           debug_role_switch_enabled: profileRes.data.debug_role_switch_enabled ?? false,
           onboarding_completed: profileRes.data.onboarding_completed ?? false,
-          source: (profileRes.data as any).source ?? null,
+          source: src,
           product_tour_seen: (profileRes.data as any).product_tour_seen ?? false,
+          has_starter_offer_access: !!(offer?.active && offer?.grants_starter_access),
         });
         setHasSalesNav((profileRes.data as any).has_sales_nav ?? false);
 
@@ -140,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       if (currentSession?.user) {
-        await fetchUserData(currentSession.user.id, currentSession.user.user_metadata?.full_name ?? null, currentSession.user.user_metadata?.source ?? null);
+        await fetchUserData(currentSession.user.id, currentSession.user.user_metadata?.full_name ?? null);
       }
       setLoading(false);
       initializedRef.current = true;
@@ -165,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fire and forget - do NOT await inside onAuthStateChange
       if (initializedRef.current) {
         // Only fetch user data on subsequent auth changes (not initial load)
-        fetchUserData(nextSession.user.id, nextSession.user.user_metadata?.full_name ?? null, nextSession.user.user_metadata?.source ?? null);
+        fetchUserData(nextSession.user.id, nextSession.user.user_metadata?.full_name ?? null);
       }
     });
 

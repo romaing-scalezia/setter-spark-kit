@@ -71,6 +71,7 @@ serve(async (req) => {
       { data: leadCounts },
       { data: campaignJobs },
       { data: campaignCounts },
+      { data: offers },
     ] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type, has_sales_nav"),
       supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override"),
@@ -80,7 +81,10 @@ serve(async (req) => {
       supabaseAdmin.rpc("get_leads_count_by_owner"),
       supabaseAdmin.from("campaign_jobs" as any).select("id, status, error_message, created_at").eq("status", "error").order("created_at", { ascending: false }).limit(50),
       supabaseAdmin.rpc("get_campaign_counts_by_user"),
+      supabaseAdmin.from("offers" as any).select("slug, label, active"),
     ]);
+
+    const offersMap = new Map((offers || []).map((o: any) => [o.slug, o]));
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
     const membershipMap = new Map((memberships || []).map((m: any) => [m.user_id, m]));
@@ -155,6 +159,7 @@ serve(async (req) => {
     const now = new Date();
     const enrichedUsers = users.map((u: any) => {
       const profile = profileMap.get(u.id) || {};
+      const offer = offersMap.get((profile as any).source) as any;
       const membership = membershipMap.get(u.id);
       const role = roleMap.get(u.id) || profile.role || "user";
       const unipile = unipileMap.get(u.id);
@@ -194,6 +199,7 @@ serve(async (req) => {
         avatar_url: profile.avatar_url || null,
         role,
         source: (profile as any).source || null,
+        offer_label: offer?.active ? offer.label : null,
         business_type: (profile as any).business_type || null,
         onboarding_completed: (profile as any).onboarding_completed || false,
         provider,

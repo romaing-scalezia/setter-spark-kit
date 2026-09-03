@@ -34,10 +34,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    // Vérifie côté serveur si l'utilisateur est starterpack — ne pas faire confiance au frontend
+    // Vérifie côté serveur si l'utilisateur est sur une offre — ne pas faire confiance au frontend
     const starterpackPriceId = Deno.env.get("STRIPE_PRICE_STARTERPACK_ID");
     const { data: profile } = await supabase.from("profiles").select("source").eq("id", user.id).maybeSingle();
-    const isStarterpack = (profile as any)?.source === "starterpack" && !!starterpackPriceId;
+    const src = (profile as any)?.source;
+    const { data: offer } = src
+      ? await supabase.from("offers" as any).select("active").eq("slug", src).maybeSingle()
+      : { data: null };
+    const isStarterpack = !!(offer as any)?.active && !!starterpackPriceId;
     const priceId: string = isStarterpack ? starterpackPriceId! : defaultPriceId;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" });

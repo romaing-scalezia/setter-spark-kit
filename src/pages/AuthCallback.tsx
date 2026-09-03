@@ -59,11 +59,8 @@ export default function AuthCallback() {
       const source = searchParams.get('source');
       if (source) {
         await supabase.auth.updateUser({ data: { source } });
-      }
-
-      // Activate 14-day trial for starterpack users (handles both email + Google OAuth)
-      if (source === 'starterpack') {
-        await supabase.rpc('activate_starterpack_trial');
+        // No-op if `source` doesn't match an active row in `offers` (handles both email + Google OAuth)
+        await supabase.rpc('activate_offer_trial');
       }
 
       // Fetch role to determine redirect target

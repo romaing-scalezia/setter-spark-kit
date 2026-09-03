@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Shield, Users, Loader2, Trash2, Plus, UserPlus, Search,
   Eye, Linkedin, AlertTriangle, TrendingUp, Clock, CheckCircle2,
-  Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2, Gauge,
+  Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2, Gauge, Copy, Check,
 } from 'lucide-react';
 import type { AppRole } from '@/lib/constants';
 import { format, differenceInDays } from 'date-fns';
@@ -47,6 +47,7 @@ interface EnrichedUser {
   avatar_url: string | null;
   role: AppRole;
   source: string | null;
+  offer_label: string | null;
   business_type: string | null;
   onboarding_completed: boolean;
   provider: string;
@@ -110,6 +111,7 @@ export default function AdminPage() {
   const [newRole, setNewRole] = useState<AppRole>('user');
   const [extendDays, setExtendDays] = useState('14');
   const [quotaInput, setQuotaInput] = useState('');
+  const [selectedOfferSlug, setSelectedOfferSlug] = useState('');
   const [extendingUser, setExtendingUser] = useState<EnrichedUser | null>(null);
   const [selectedCoach, setSelectedCoach] = useState('');
   const [selectedStudent, setSelectedStudent] = useState('');
@@ -122,6 +124,28 @@ export default function AdminPage() {
   const [editingContent, setEditingContent] = useState<string | null>(null);
   const [personaName, setPersonaName] = useState('');
   const [personaDesc, setPersonaDesc] = useState('');
+
+  // ─── Offres state ───────────────────────────────────────────────────────────
+  const [editingOfferSlug, setEditingOfferSlug] = useState<string | null>(null);
+  const [offerSlug, setOfferSlug] = useState('');
+  const [offerLabel, setOfferLabel] = useState('');
+  const [offerTrialDays, setOfferTrialDays] = useState('30');
+  const [offerPlan, setOfferPlan] = useState<'free' | 'starter' | 'pro' | 'coach'>('starter');
+  const [offerGrantsStarter, setOfferGrantsStarter] = useState(true);
+  const [offerActive, setOfferActive] = useState(true);
+  const [copiedOfferSlug, setCopiedOfferSlug] = useState<string | null>(null);
+
+  const offerSignupUrl = (slug: string) => `${window.location.origin}/register?source=${slug}`;
+  const handleCopyOfferLink = async (slug: string) => {
+    try {
+      await navigator.clipboard.writeText(offerSignupUrl(slug));
+      setCopiedOfferSlug(slug);
+      toast({ title: 'Lien copié !' });
+      setTimeout(() => setCopiedOfferSlug(null), 2000);
+    } catch {
+      toast({ variant: 'destructive', title: 'Erreur', description: 'Impossible de copier le lien' });
+    }
+  };
 
   const callEdge = async (fn: string, body: object) => {
     const { data, error } = await supabase.functions.invoke(fn, { body });
@@ -158,7 +182,7 @@ export default function AdminPage() {
     // annual plans already normalized to a monthly-equivalent amount.
     const mrr = Math.round(revenueUsers.reduce((sum, u) => sum + (u.membership?.mrr_cents ?? 0), 0)) / 100;
     const linkedinOk = users.filter(u => u.linkedin_connected).length;
-    const starterpack = users.filter(u => u.source === 'starterpack').length;
+    const starterpack = users.filter(u => !!u.offer_label).length;
     const newThisWeek = users.filter(u => {
       try { return differenceInDays(new Date(), new Date(u.created_at)) <= 7; } catch { return false; }
     }).length;
@@ -174,7 +198,7 @@ export default function AdminPage() {
       if (planFilter === 'trialing' && u.membership?.status !== 'trialing') return false;
       if (planFilter !== 'trialing' && u.membership?.plan !== planFilter) return false;
     }
-    if (sourceFilter !== 'all' && (sourceFilter === 'starterpack' ? u.source !== 'starterpack' : u.source === 'starterpack')) return false;
+    if (sourceFilter !== 'all' && (sourceFilter === 'starterpack' ? !u.offer_label : !!u.offer_label)) return false;
     if (linkedinFilter === 'yes' && !u.linkedin_connected) return false;
     if (linkedinFilter === 'no' && u.linkedin_connected) return false;
     return true;
@@ -195,14 +219,6 @@ export default function AdminPage() {
     mutationFn: ({ userId, role }: { userId: string; role: AppRole }) =>
       supabase.rpc('set_user_role', { _target_user_id: userId, _role: role }).then(({ error }) => { if (error) throw error; }),
     onSuccess: () => { invalidate(); toast({ title: 'Rôle mis à jour' }); },
-    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
-  const forceStarterpack = useMutation({
-    mutationFn: (userId: string) =>
-      (supabase as any).from('profiles').update({ source: 'starterpack' }).eq('id', userId)
-        .then(({ error }: any) => { if (error) throw error; }),
-    onSuccess: () => { invalidate(); toast({ title: 'Source mise à jour → starterpack' }); },
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
   });
 
@@ -332,6 +348,63 @@ export default function AdminPage() {
     onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
   });
 
+  // ─── Offres ─────────────────────────────────────────────────────────────────
+  const { data: offers = [], isLoading: offersLoading } = useQuery({
+    queryKey: ['admin-offers'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('offers').select('*').order('trial_days');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  const activeOffers = offers.filter((o: any) => o.active);
+
+  const resetOfferForm = () => {
+    setEditingOfferSlug(null);
+    setOfferSlug(''); setOfferLabel(''); setOfferTrialDays('30');
+    setOfferPlan('starter'); setOfferGrantsStarter(true); setOfferActive(true);
+  };
+
+  const startEditOffer = (o: any) => {
+    setEditingOfferSlug(o.slug);
+    setOfferSlug(o.slug); setOfferLabel(o.label); setOfferTrialDays(String(o.trial_days));
+    setOfferPlan(o.plan); setOfferGrantsStarter(o.grants_starter_access); setOfferActive(o.active);
+  };
+
+  const upsertOffer = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase as any).from('offers').upsert({
+        slug: offerSlug.trim(),
+        label: offerLabel.trim(),
+        trial_days: parseInt(offerTrialDays, 10),
+        plan: offerPlan,
+        grants_starter_access: offerGrantsStarter,
+        active: offerActive,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-offers'] });
+      toast({ title: editingOfferSlug ? 'Offre mise à jour' : 'Offre créée' });
+      resetOfferForm();
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
+  const applyOffer = useMutation({
+    mutationFn: async ({ userId, slug }: { userId: string; slug: string }) => {
+      const { error } = await supabase.rpc('admin_apply_offer' as any, { p_user_id: userId, p_slug: slug });
+      if (error) throw error;
+    },
+    onSuccess: (_data, { slug }) => {
+      invalidate();
+      setSelectedOfferSlug('');
+      const label = offers.find((o: any) => o.slug === slug)?.label ?? slug;
+      toast({ title: `Offre "${label}" appliquée` });
+    },
+    onError: (e: Error) => toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
+  });
+
   const createPersona = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from('personas').insert({
@@ -451,6 +524,7 @@ export default function AdminPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="content">Contenu global</TabsTrigger>
+            <TabsTrigger value="offers">Offres</TabsTrigger>
           </TabsList>
 
           {/* ── Utilisateurs ───────────────────────────────────────── */}
@@ -551,8 +625,8 @@ export default function AdminPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {u.source === 'starterpack'
-                                ? <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary"><Sparkles className="h-3 w-3" /> Starterpack</span>
+                              {u.offer_label
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary"><Sparkles className="h-3 w-3" /> {u.offer_label}</span>
                                 : <span className="text-xs text-muted-foreground">—</span>}
                             </TableCell>
                             <TableCell>
@@ -847,6 +921,104 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ── Offres ─────────────────────────────────────────────── */}
+          <TabsContent value="offers" className="mt-4 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    {editingOfferSlug ? "Modifier l'offre" : 'Nouvelle offre'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Slug (utilisé comme valeur de "source" à l'inscription)</Label>
+                    <Input value={offerSlug} onChange={e => setOfferSlug(e.target.value)} placeholder="Ex : starterpack-45j" disabled={!!editingOfferSlug} className="text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Libellé affiché</Label>
+                    <Input value={offerLabel} onChange={e => setOfferLabel(e.target.value)} placeholder="Ex : Starterpack 6 semaines" className="text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Durée d'essai (jours)</Label>
+                      <Input type="number" min="1" value={offerTrialDays} onChange={e => setOfferTrialDays(e.target.value)} className="h-8 text-xs" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Plan accordé</Label>
+                      <Select value={offerPlan} onValueChange={v => setOfferPlan(v as typeof offerPlan)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="free" className="text-xs">Free</SelectItem>
+                          <SelectItem value="starter" className="text-xs">Starter</SelectItem>
+                          <SelectItem value="pro" className="text-xs">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={offerGrantsStarter} onChange={e => setOfferGrantsStarter(e.target.checked)} className="rounded" />
+                      Accès starter (leaderboard, notes coach)
+                    </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={offerActive} onChange={e => setOfferActive(e.target.checked)} className="rounded" />
+                      Active
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      onClick={() => upsertOffer.mutate()}
+                      disabled={upsertOffer.isPending || !offerSlug.trim() || !offerLabel.trim() || !offerTrialDays}
+                    >
+                      {upsertOffer.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      {editingOfferSlug ? 'Enregistrer' : <><Plus className="h-3.5 w-3.5 mr-1.5" /> Créer</>}
+                    </Button>
+                    {editingOfferSlug && (
+                      <Button variant="ghost" onClick={resetOfferForm}>Annuler</Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Offres existantes ({offers.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {offersLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {offers.map((o: any) => (
+                        <div key={o.slug} className={`rounded-md border px-3 py-2 ${o.active ? 'border-border' : 'border-border/50 opacity-60'}`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium">{o.label} {!o.active && <span className="text-xs text-muted-foreground">(inactive)</span>}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{o.slug} · {o.trial_days}j · {o.plan}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => startEditOffer(o)}>
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <div className="mt-2 flex items-center gap-1.5 rounded bg-muted/50 px-2 py-1">
+                            <code className="flex-1 truncate text-[11px] text-muted-foreground">{offerSignupUrl(o.slug)}</code>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleCopyOfferLink(o.slug)}>
+                              {copiedOfferSlug === o.slug ? <Check className="h-3 w-3 text-green-600" /> : <Copy className="h-3 w-3" />}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {offers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Aucune offre</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -936,13 +1108,26 @@ export default function AdminPage() {
                     </Button>
                   </div>
 
-                  {/* Forcer starterpack */}
-                  {selectedUser.source !== 'starterpack' && (
-                    <Button size="sm" variant="outline" className="w-full" onClick={() => forceStarterpack.mutate(selectedUser.id)} disabled={forceStarterpack.isPending}>
-                      {forceStarterpack.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                      <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Passer en Starterpack
+                  {/* Appliquer une offre */}
+                  <div className="flex gap-2">
+                    <Select value={selectedOfferSlug} onValueChange={setSelectedOfferSlug}>
+                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Choisir une offre" /></SelectTrigger>
+                      <SelectContent>
+                        {activeOffers.map((o: any) => (
+                          <SelectItem key={o.slug} value={o.slug} className="text-xs">{o.label} ({o.trial_days}j)</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selectedOfferSlug && applyOffer.mutate({ userId: selectedUser.id, slug: selectedOfferSlug })}
+                      disabled={applyOffer.isPending || !selectedOfferSlug}
+                    >
+                      {applyOffer.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Appliquer
                     </Button>
-                  )}
+                  </div>
 
                   {/* Changer rôle */}
                   <div className="flex gap-2 items-center">
