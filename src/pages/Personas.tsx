@@ -68,7 +68,7 @@ function PersonaForm({
   const [coachNotes, setCoachNotes] = useState(persona?.coach_notes || '');
 
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
       <div className="space-y-2">
         <Label>Nom de la cible *</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: CEO SaaS B2B" />
@@ -528,7 +528,7 @@ export function PersonasContent() {
 
       {/* Create modal */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-[532px]">
           <DialogHeader><DialogTitle>Nouvelle persona</DialogTitle></DialogHeader>
           <PersonaForm onSave={(data) => createPersona.mutate(data)} onCancel={() => setCreateOpen(false)} isPending={createPersona.isPending} />
         </DialogContent>
@@ -536,7 +536,7 @@ export function PersonasContent() {
 
       {/* Edit modal */}
       <Dialog open={!!editingPersona} onOpenChange={(o) => { if (!o) setEditingPersona(null); }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-[532px]">
           <DialogHeader><DialogTitle>Modifier la persona</DialogTitle></DialogHeader>
           {editingPersona && (
             <PersonaForm persona={editingPersona} onSave={(data) => updatePersona.mutate(data)} onCancel={() => setEditingPersona(null)} isPending={updatePersona.isPending} />

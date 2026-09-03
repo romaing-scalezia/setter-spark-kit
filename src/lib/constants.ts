@@ -75,7 +75,7 @@ export const OUTREACH_TYPE_LABELS: Record<string, string> = {
 };
 
 // Persona structured dropdowns
-export const COMPANY_SIZES = ['Solo', '1–10', '11–50', '51–200', '200+'] as const;
+export const COMPANY_SIZES = ['Solo', '1-10', '11-50', '51-200', '200-500', '501-1000', '+1000'] as const;
 
 export const TARGET_TYPES = [
   'SaaS', 'Agence', 'Freelance', 'E-commerce', 'Startup',
