@@ -47,7 +47,7 @@ serve(async (req) => {
         const subscriptionId = session.subscription as string;
         const customerId = session.customer as string;
 
-        await admin.from("memberships").update({
+        const { error } = await admin.from("memberships").update({
           plan: "starter",
           status: "active",
           stripe_customer_id: customerId,
@@ -55,6 +55,7 @@ serve(async (req) => {
           current_period_start: null,
           current_period_end: null,
         }).eq("user_id", userId);
+        if (error) console.error("[stripe-webhook] checkout.session.completed update failed:", error);
         break;
       }
 
@@ -72,12 +73,13 @@ serve(async (req) => {
           : sub.status === "canceled" ? "canceled"
           : "incomplete";
 
-        await admin.from("memberships").update({
+        const { error } = await admin.from("memberships").update({
           status,
           ...(sub.status === "canceled" ? { plan: "free" } : {}),
           current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
           current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
         }).eq("user_id", membership.user_id);
+        if (error) console.error("[stripe-webhook] customer.subscription.updated update failed:", error);
         break;
       }
 
@@ -90,19 +92,23 @@ serve(async (req) => {
           .maybeSingle();
         if (!membership) break;
 
-        await admin.from("memberships").update({
+        const { error } = await admin.from("memberships").update({
           plan: "free",
           status: "canceled",
           stripe_subscription_id: null,
         }).eq("user_id", membership.user_id);
+        if (error) console.error("[stripe-webhook] customer.subscription.deleted update failed:", error);
         break;
       }
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const customerId = invoice.customer as string;
-        await admin.from("memberships").update({ status: "past_due" })
-          .eq("stripe_customer_id", customerId);
+        const subscriptionId = invoice.subscription as string | null;
+        if (!subscriptionId) break;
+
+        const { error } = await admin.from("memberships").update({ status: "past_due" })
+          .eq("stripe_subscription_id", subscriptionId);
+        if (error) console.error("[stripe-webhook] invoice.payment_failed update failed:", error);
         break;
       }
     }
