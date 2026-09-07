@@ -22,6 +22,13 @@ import { Loader2, Search, AlertTriangle, CheckCircle2, XCircle, Linkedin } from 
 import { parseFunctionErrorBody } from '@/lib/functionsError';
 import { LinkedInConnectDialog } from '@/components/LinkedInConnectDialog';
 
+function salesNavErrorMessage(code: string | undefined, fallback: string): string {
+  if (code === 'rate_limited') {
+    return "LinkedIn est temporairement surchargé (trop de recherches). Réessaie dans quelques minutes.";
+  }
+  return code || fallback;
+}
+
 interface Prospect {
   provider_id: string | null;
   first_name: string;
@@ -111,9 +118,9 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
           setReauthAccountId((body.account_id as string) ?? null);
           return;
         }
-        throw new Error(body?.error || error.message);
+        throw new Error(salesNavErrorMessage(body?.error as string | undefined, error.message));
       }
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) throw new Error(salesNavErrorMessage(data.error, data.error));
 
       const prv: Prospect[] = data.prospects ?? [];
       setProspects(prv);
@@ -148,9 +155,9 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
           setReauthAccountId((body.account_id as string) ?? null);
           return;
         }
-        throw new Error(body?.error || error.message);
+        throw new Error(salesNavErrorMessage(body?.error as string | undefined, error.message));
       }
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) throw new Error(salesNavErrorMessage(data.error, data.error));
 
       const more: Prospect[] = data.prospects ?? [];
       setProspects((prev) => [...prev, ...more]);

@@ -105,6 +105,10 @@ serve(async (req) => {
             return jsonResponse({ error: "linkedin_reauth_required", account_id: account.account_id }, 400);
           }
 
+          if (searchRes.status === 429) {
+            return jsonResponse({ error: "rate_limited" }, 429);
+          }
+
           return jsonResponse({ error: "unipile_error", details: err }, 400);
         }
 
