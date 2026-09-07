@@ -19,6 +19,10 @@ function cleanName(raw: string | null | undefined): string {
     .trim();
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -75,6 +79,13 @@ serve(async (req) => {
       let nextCursor: string | null = null;
 
       while (items.length < maxResults) {
+        // Espace les appels pour ne pas enchainer les pages a la suite (pattern
+        // que la doc Unipile deconseille explicitement, ca ressemble a du scraping
+        // aux yeux des systemes anti-bot de LinkedIn et declenche des 429).
+        if (items.length > 0) {
+          await sleep(500 + Math.random() * 1000);
+        }
+
         const pageLimit = Math.min(100, maxResults - items.length);
         const qs = new URLSearchParams({
           account_id: account.account_id,
