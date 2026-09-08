@@ -117,6 +117,19 @@ serve(async (req) => {
 
   // ── Traitement séquentiel des jobs d'un user ──────────────────────────────
   async function processUser(userId: string): Promise<number> {
+    // Limites journalieres personnalisables par l'utilisateur (par defaut 20,
+    // cf. LinkedInLimitsModal) — a defaut de ligne memberships, on retombe
+    // sur les constantes globales.
+    const { data: membership } = await admin
+      .from("memberships")
+      .select("visits_daily_limit, invites_daily_limit, messages_daily_limit")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const maxVisits   = membership?.visits_daily_limit   ?? MAX_VISITS_PER_DAY;
+    const maxInvites  = membership?.invites_daily_limit  ?? MAX_INVITES_PER_DAY;
+    const maxMessages = membership?.messages_daily_limit ?? MAX_MESSAGES_PER_DAY;
+
     // Récupère les compteurs journaliers AVANT de fetcher les jobs
     // pour exclure dès la requête les action_types dont le quota est plein
     const { data: doneToday } = await admin
@@ -136,11 +149,11 @@ serve(async (req) => {
     // Construit la liste des action_types dont le quota n'est pas plein
     const availableTypes: string[] = [];
     const fullTypes: string[] = [];
-    if (counts.visits   < MAX_VISITS_PER_DAY)   availableTypes.push("visit");
-    else                                        fullTypes.push("visit");
-    if (counts.invites  < MAX_INVITES_PER_DAY)  availableTypes.push("invite");
-    else                                        fullTypes.push("invite");
-    if (counts.messages < MAX_MESSAGES_PER_DAY) {
+    if (counts.visits   < maxVisits)   availableTypes.push("visit");
+    else                                fullTypes.push("visit");
+    if (counts.invites  < maxInvites)  availableTypes.push("invite");
+    else                                fullTypes.push("invite");
+    if (counts.messages < maxMessages) {
       availableTypes.push("message_1", "message_2", "message_3");
     } else {
       fullTypes.push("message_1", "message_2", "message_3");
@@ -198,9 +211,9 @@ serve(async (req) => {
       // cette même exécution) : on replanifie plutôt que de laisser un
       // execute_at périmé trainer jusqu'à la remise à zéro du quota.
       const quotaJustFilled =
-        (job.action_type === "visit"   && counts.visits   >= MAX_VISITS_PER_DAY)   ||
-        (job.action_type === "invite"  && counts.invites  >= MAX_INVITES_PER_DAY)  ||
-        (job.action_type.startsWith("message") && counts.messages >= MAX_MESSAGES_PER_DAY);
+        (job.action_type === "visit"   && counts.visits   >= maxVisits)   ||
+        (job.action_type === "invite"  && counts.invites  >= maxInvites)  ||
+        (job.action_type.startsWith("message") && counts.messages >= maxMessages);
       if (quotaJustFilled) {
         await admin.from("campaign_jobs").update({ execute_at: scheduleInWorkingHours(1) }).eq("id", job.id);
         continue;

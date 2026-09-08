@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Linkedin } from 'lucide-react';
+import { Loader2, Linkedin, SlidersHorizontal } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnipileAccount } from '@/hooks/useUnipileAccount';
 import { useToast } from '@/hooks/use-toast';
 import { LinkedInConnectDialog } from '@/components/LinkedInConnectDialog';
+import { LinkedInLimitsModal } from '@/components/LinkedInLimitsModal';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +28,7 @@ export function LinkedInIntegrationCard() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [reconnectOpen, setReconnectOpen] = useState(false);
+  const [limitsOpen, setLimitsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +95,7 @@ export function LinkedInIntegrationCard() {
       reconnectAccountId={account?.account_id}
       onSuccess={refetch}
     />
+    <LinkedInLimitsModal open={limitsOpen} onOpenChange={setLimitsOpen} />
     <Card data-testid="settings-linkedin-card">
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
@@ -126,6 +129,10 @@ export function LinkedInIntegrationCard() {
                   Reconnecter
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setLimitsOpen(true)} data-testid="settings-linkedin-limits">
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Gérer mes limites LinkedIn
+              </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" disabled={busy} data-testid="settings-linkedin-disconnect">
