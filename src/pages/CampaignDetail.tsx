@@ -15,11 +15,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users, Trash2, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useCampaignDetail } from '@/hooks/useCampaignDetail';
 import type { CampaignStatus, CampaignLead } from '@/hooks/useCampaignDetail';
+import { useUnipileAccount } from '@/hooks/useUnipileAccount';
+import { useToast } from '@/hooks/use-toast';
 import {
   CAMPAIGN_STATUS_LABELS,
   CAMPAIGN_STATUS_STYLES,
@@ -50,9 +54,13 @@ function leadName(lead: CampaignLead) {
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { detail, isLoading, toggleStatus, deleteLeads } = useCampaignDetail(id);
+  const { detail, isLoading, toggleStatus, deleteLeads, sendManualMessage } = useCampaignDetail(id);
+  const { account: unipileAccount } = useUnipileAccount();
+  const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [messageLead, setMessageLead] = useState<CampaignLead | null>(null);
+  const [messageText, setMessageText] = useState('');
 
   if (isLoading) {
     return (
@@ -96,6 +104,28 @@ export default function CampaignDetail() {
   const confirmDelete = () => {
     deleteLeads.mutate(Array.from(selectedIds), { onSuccess: () => setSelectedIds(new Set()) });
     setDeleteConfirmOpen(false);
+  };
+
+  const handleSendMessage = () => {
+    if (!messageLead || !messageLead.provider_id || !unipileAccount?.account_id || !messageText.trim()) return;
+    sendManualMessage.mutate(
+      {
+        leadId: messageLead.id,
+        providerId: messageLead.provider_id,
+        accountId: unipileAccount.account_id,
+        text: messageText.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast({ title: 'Message envoyé' });
+          setMessageLead(null);
+          setMessageText('');
+        },
+        onError: (err: any) => {
+          toast({ variant: 'destructive', title: 'Envoi échoué', description: err.message ?? String(err) });
+        },
+      },
+    );
   };
 
   return (
@@ -272,7 +302,19 @@ export default function CampaignDetail() {
                         <span className="text-sm text-muted-foreground">{formatDate(lead.accepted_at)}</span>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground">{formatDate(lead.messaged_1_at)}</span>
+                        {detail.scenario_type === 'A' && lead.accepted_at && !lead.messaged_1_at && lead.provider_id ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1.5"
+                            onClick={() => { setMessageLead(lead); setMessageText(''); }}
+                          >
+                            <Send className="h-3 w-3" />
+                            Envoyer un message
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">{formatDate(lead.messaged_1_at)}</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">{formatDate(lead.messaged_2_at)}</span>
@@ -303,6 +345,30 @@ export default function CampaignDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!messageLead} onOpenChange={(o) => { if (!o) { setMessageLead(null); setMessageText(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Envoyer un message à {messageLead ? leadName(messageLead) : ''}</DialogTitle>
+            <DialogDescription>
+              Message envoyé directement via LinkedIn, sans quitter SetterFlow.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            placeholder="Écrivez votre message..."
+            rows={5}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMessageLead(null); setMessageText(''); }}>Annuler</Button>
+            <Button onClick={handleSendMessage} disabled={sendManualMessage.isPending || !messageText.trim()}>
+              {sendManualMessage.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Envoyer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

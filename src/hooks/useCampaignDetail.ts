@@ -1,6 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { parseFunctionErrorBody } from '@/lib/functionsError';
 import type { CampaignStatus } from './useCampaigns';
+
+// unipile-proxy renvoie { error: "Unipile error", details: <reponse brute Unipile> }
+// sur un echec — Unipile decrit l'erreur dans details.detail/details.title, pas
+// dans un champ "message" (cf. LinkedInConnectDialog.tsx pour le meme pattern).
+async function unipileErrorMessage(error: unknown, fallback: string): Promise<string> {
+  const body = await parseFunctionErrorBody(error) as { error?: string; details?: { detail?: string; title?: string } } | null;
+  return body?.details?.detail ?? body?.details?.title ?? body?.error ?? fallback;
+}
 
 export type ActionType = 'visit' | 'invite' | 'message';
 
@@ -18,6 +27,7 @@ export interface CampaignLead {
   first_name: string | null;
   last_name: string | null;
   company_name: string | null;
+  provider_id: string | null;
   status: string | null;
   invited_at: string | null;
   accepted_at: string | null;
@@ -62,7 +72,7 @@ export function useCampaignDetail(id: string | undefined) {
           .order('step_order', { ascending: true }),
         (supabase as any)
           .from('campaign_leads')
-          .select('id, linkedin_url, first_name, last_name, company_name, status, invited_at, accepted_at, messaged_1_at, messaged_2_at, messaged_3_at, replied_at, error_message')
+          .select('id, linkedin_url, first_name, last_name, company_name, provider_id, status, invited_at, accepted_at, messaged_1_at, messaged_2_at, messaged_3_at, replied_at, error_message')
           .eq('campaign_id', id),
         (supabase as any)
           .from('campaign_jobs')
@@ -130,5 +140,21 @@ export function useCampaignDetail(id: string | undefined) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['campaign-detail', id] }),
   });
 
-  return { detail: query.data, isLoading: query.isLoading, toggleStatus, deleteLeads };
+  const sendManualMessage = useMutation({
+    mutationFn: async ({ leadId, providerId, accountId, text }: { leadId: string; providerId: string; accountId: string; text: string }) => {
+      const { error } = await supabase.functions.invoke('unipile-proxy', {
+        body: { action: 'start_conversation', account_id: accountId, attendee_provider_id: providerId, text },
+      });
+      if (error) throw new Error(await unipileErrorMessage(error, error.message));
+
+      const { error: updateError } = await (supabase as any)
+        .from('campaign_leads')
+        .update({ messaged_1_at: new Date().toISOString() })
+        .eq('id', leadId);
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaign-detail', id] }),
+  });
+
+  return { detail: query.data, isLoading: query.isLoading, toggleStatus, deleteLeads, sendManualMessage };
 }
