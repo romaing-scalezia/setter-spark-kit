@@ -385,31 +385,34 @@ serve(async (req) => {
 
                 let leadId = existingLead?.id;
                 if (!leadId) {
-                  const { data: newLead } = await admin.from("leads").insert({
+                  const { data: newLead, error: leadInsertError } = await admin.from("leads").insert({
                     owner_id:                userId,
                     first_name:              lead.first_name,
                     last_name:               lead.last_name,
                     company_name:            lead.company_name,
                     linkedin_url:            lead.linkedin_url,
                     status:                  "conversation_engagee",
-                    outreach_type:           "message texte",
+                    outreach_type:           "message_texte",
                     conversation_started_at: now,
                     ...(chatId ? { unipile_chat_id: chatId } : {}),
                   }).select("id").single();
+                  if (leadInsertError) console.error("[campaign-runner] leads insert failed:", leadInsertError);
                   leadId = newLead?.id;
                 } else if (chatId && !existingLead?.unipile_chat_id) {
-                  await admin.from("leads")
+                  const { error: chatIdError } = await admin.from("leads")
                     .update({ unipile_chat_id: chatId })
                     .eq("id", leadId);
+                  if (chatIdError) console.error("[campaign-runner] leads unipile_chat_id update failed:", chatIdError);
                 }
 
                 if (leadId) {
-                  await admin.from("lead_events").insert({
+                  const { error: eventError } = await admin.from("lead_events").insert({
                     lead_id:    leadId,
                     user_id:    userId,
                     event_type: "status_changed",
                     new_value:  "conversation_engagee",
                   });
+                  if (eventError) console.error("[campaign-runner] lead_events insert failed:", eventError);
                 }
               }
 

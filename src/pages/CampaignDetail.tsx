@@ -110,8 +110,7 @@ export default function CampaignDetail() {
     if (!messageLead || !messageLead.provider_id || !unipileAccount?.account_id || !messageText.trim()) return;
     sendManualMessage.mutate(
       {
-        leadId: messageLead.id,
-        providerId: messageLead.provider_id,
+        lead: messageLead,
         accountId: unipileAccount.account_id,
         text: messageText.trim(),
       },

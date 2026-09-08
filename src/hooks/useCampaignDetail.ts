@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseFunctionErrorBody } from '@/lib/functionsError';
+import { useAuth } from '@/contexts/AuthContext';
 import type { CampaignStatus } from './useCampaigns';
 
 // unipile-proxy renvoie { error: "Unipile error", details: <reponse brute Unipile> }
@@ -53,6 +54,7 @@ export interface CampaignDetail {
 
 export function useCampaignDetail(id: string | undefined) {
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   const query = useQuery({
     queryKey: ['campaign-detail', id],
@@ -141,17 +143,62 @@ export function useCampaignDetail(id: string | undefined) {
   });
 
   const sendManualMessage = useMutation({
-    mutationFn: async ({ leadId, providerId, accountId, text }: { leadId: string; providerId: string; accountId: string; text: string }) => {
-      const { error } = await supabase.functions.invoke('unipile-proxy', {
-        body: { action: 'start_conversation', account_id: accountId, attendee_provider_id: providerId, text },
+    mutationFn: async ({ lead, accountId, text }: { lead: CampaignLead; accountId: string; text: string }) => {
+      if (!user) throw new Error('Non authentifié');
+      if (!lead.provider_id) throw new Error('provider_id manquant pour ce lead');
+
+      const { data, error } = await supabase.functions.invoke('unipile-proxy', {
+        body: { action: 'start_conversation', account_id: accountId, attendee_provider_id: lead.provider_id, text },
       });
       if (error) throw new Error(await unipileErrorMessage(error, error.message));
 
+      const chatId: string | null = (data as any)?.id ?? (data as any)?.chat_id ?? null;
+      const now = new Date().toISOString();
+
       const { error: updateError } = await (supabase as any)
         .from('campaign_leads')
-        .update({ messaged_1_at: new Date().toISOString() })
-        .eq('id', leadId);
+        .update({ messaged_1_at: now })
+        .eq('id', lead.id);
       if (updateError) throw updateError;
+
+      // Cree/met a jour le lead CRM correspondant, meme logique que
+      // campaign-runner pour le premier message automatise (message_1).
+      const { data: existingLead } = await (supabase as any)
+        .from('leads')
+        .select('id, unipile_chat_id')
+        .eq('owner_id', user.id)
+        .eq('linkedin_url', lead.linkedin_url)
+        .maybeSingle();
+
+      let leadId: string | undefined = existingLead?.id;
+      if (!leadId) {
+        const { data: newLead, error: leadInsertError } = await (supabase as any).from('leads').insert({
+          owner_id:                user.id,
+          first_name:              lead.first_name,
+          last_name:               lead.last_name,
+          company_name:            lead.company_name,
+          linkedin_url:            lead.linkedin_url,
+          status:                  'conversation_engagee',
+          outreach_type:           'message_texte',
+          conversation_started_at: now,
+          ...(chatId ? { unipile_chat_id: chatId } : {}),
+        }).select('id').single();
+        if (leadInsertError) throw leadInsertError;
+        leadId = newLead?.id;
+      } else if (chatId && !existingLead?.unipile_chat_id) {
+        const { error: chatIdError } = await (supabase as any).from('leads').update({ unipile_chat_id: chatId }).eq('id', leadId);
+        if (chatIdError) throw chatIdError;
+      }
+
+      if (leadId) {
+        const { error: eventError } = await (supabase as any).from('lead_events').insert({
+          lead_id:    leadId,
+          user_id:    user.id,
+          event_type: 'status_changed',
+          new_value:  'conversation_engagee',
+        });
+        if (eventError) throw eventError;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['campaign-detail', id] }),
   });
