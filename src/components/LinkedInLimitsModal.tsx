@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,6 +89,7 @@ export function LinkedInLimitsModal({ open, onOpenChange }: LinkedInLimitsModalP
   const [visits, setVisits] = useState(20);
   const [invites, setInvites] = useState(20);
   const [messages, setMessages] = useState(20);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -119,6 +130,20 @@ export function LinkedInLimitsModal({ open, onOpenChange }: LinkedInLimitsModalP
     onOpenChange(false);
   };
 
+  const handleSaveClick = () => {
+    const overLimit = visits > RECOMMENDED_MAX || invites > RECOMMENDED_MAX || messages > RECOMMENDED_MAX;
+    if (overLimit) {
+      setConfirmOpen(true);
+      return;
+    }
+    handleSave();
+  };
+
+  const handleConfirmRisk = () => {
+    setConfirmOpen(false);
+    handleSave();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -151,12 +176,28 @@ export function LinkedInLimitsModal({ open, onOpenChange }: LinkedInLimitsModalP
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
-          <Button onClick={handleSave} disabled={saving || loading}>
+          <Button onClick={handleSaveClick} disabled={saving || loading}>
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Enregistrer
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer le risque ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              En dépassant les limites recommandées par LinkedIn vous exposez votre compte à
+              une suspension temporaire ou définitive.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRisk}>Valider</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
