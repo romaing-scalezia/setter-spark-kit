@@ -181,7 +181,7 @@ serve(async (req) => {
     // Récupère uniquement les jobs dont le type n'est pas à quota
     const { data: jobs, error: jobsError } = await admin
       .from("campaign_jobs")
-      .select("*, campaign_leads(*), campaigns(user_id, status)")
+      .select("*, campaign_leads(*), campaigns!inner(user_id, status)")
       .eq("status", "pending")
       .eq("user_id", userId)
       .eq("campaigns.status", "active")
