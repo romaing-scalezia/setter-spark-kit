@@ -62,6 +62,7 @@ interface EnrichedUser {
   leads_count: number;
   campaigns: { active: number; paused: number; completed: number };
   sales_nav_import: { count: number; quota: number; reset_at: string | null };
+  linkedin_daily_limits: { visits: number; invites: number; messages: number };
   coach_of: string[];
   coached_by: string[];
 }
@@ -1044,6 +1045,7 @@ export default function AdminPage() {
                     { label: 'Sales Nav', value: selectedUser.has_sales_nav ? 'Oui' : 'Non' },
                     { label: 'Campagnes', value: `${selectedUser.campaigns.active} active · ${selectedUser.campaigns.paused} pause · ${selectedUser.campaigns.completed} terminée` },
                     { label: 'Import Sales Nav', value: selectedUser.sales_nav_import.quota > 0 ? `${selectedUser.sales_nav_import.count} / ${selectedUser.sales_nav_import.quota} ce mois` : `${selectedUser.sales_nav_import.count} importés` },
+                    { label: 'Limites LinkedIn / 24h', value: `${selectedUser.linkedin_daily_limits.visits} visites · ${selectedUser.linkedin_daily_limits.invites} invit. · ${selectedUser.linkedin_daily_limits.messages} msg` },
                     { label: 'Onboarding', value: selectedUser.onboarding_completed ? 'Complété' : 'En cours' },
                     { label: 'Inscription', value: fmt(selectedUser.created_at) },
                     { label: 'Dernière co.', value: fmt(selectedUser.last_sign_in_at) },

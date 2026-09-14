@@ -74,7 +74,7 @@ serve(async (req) => {
       { data: offers },
     ] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, full_name, email, avatar_url, role, debug_role_switch_enabled, onboarding_completed, source, business_type, has_sales_nav"),
-      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override"),
+      supabaseAdmin.from("memberships").select("user_id, plan, status, current_period_start, current_period_end, stripe_customer_id, stripe_subscription_id, prospects_imported_count, prospects_imported_reset_at, prospects_import_quota_override, visits_daily_limit, invites_daily_limit, messages_daily_limit"),
       supabaseAdmin.from("user_roles").select("user_id, role"),
       supabaseAdmin.from("coach_assignments").select("*"),
       supabaseAdmin.from("unipile_accounts" as any).select("user_id, status, account_id"),
@@ -233,6 +233,11 @@ serve(async (req) => {
           count: membership?.prospects_imported_count || 0,
           quota: prospectQuota,
           reset_at: membership?.prospects_imported_reset_at || null,
+        },
+        linkedin_daily_limits: {
+          visits: membership?.visits_daily_limit ?? 20,
+          invites: membership?.invites_daily_limit ?? 20,
+          messages: membership?.messages_daily_limit ?? 20,
         },
         coach_of: coachOf,
         coached_by: coachedBy,
