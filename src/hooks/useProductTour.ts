@@ -41,7 +41,14 @@ export function useProductTour() {
     localStorage.setItem(TOUR_DONE_KEY, 'true');
     setTourDone(true);
     if (user) {
-      (supabase as any).from('profiles').update({ product_tour_seen: true }).eq('id', user.id);
+      // Le query builder Supabase n'envoie la requete que lorsqu'il est
+      // awaite/then-e (comportement "thenable" paresseux) — sans .then()
+      // ici, l'appel n'etait jamais reellement declenche et la colonne
+      // ne se mettait donc jamais a jour en base.
+      (supabase as any).from('profiles').update({ product_tour_seen: true }).eq('id', user.id)
+        .then(({ error }: { error: unknown }) => {
+          if (error) console.error('[useProductTour] failed to persist product_tour_seen:', error);
+        });
     }
   }, [user]);
 
