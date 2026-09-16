@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +16,87 @@ import { format } from 'date-fns';
 
 const VALID_STATUSES: LeadStatus[] = ['conversation_engagee', 'en_cours', 'appel_propose', 'follow_up', 'rendez_vous_booke', 'ferme_perdu', 'non_qualifie'];
 const VALID_OUTREACH = ['message_texte', 'video', 'vocal', 'autre'];
+
+/* ─── Column mapping (user-driven, no locked header names) ─── */
+type TargetField =
+  | 'first_name' | 'last_name' | 'linkedin_url' | 'company_name' | 'job_title'
+  | 'status' | 'outreach_type' | 'source_type' | 'campaign_tag' | 'notes'
+  | 'follow_up_date' | 'follow_up_level';
+
+const TARGET_FIELDS: Array<{ key: TargetField; label: string; required: boolean }> = [
+  { key: 'first_name',      label: 'Prénom',           required: true },
+  { key: 'last_name',       label: 'Nom',              required: true },
+  { key: 'linkedin_url',    label: 'URL LinkedIn',     required: false },
+  { key: 'company_name',    label: 'Entreprise',       required: false },
+  { key: 'job_title',       label: 'Poste',            required: false },
+  { key: 'status',          label: 'Statut',           required: false },
+  { key: 'outreach_type',   label: 'Type de contact',  required: false },
+  { key: 'source_type',     label: 'Source',           required: false },
+  { key: 'campaign_tag',    label: 'Tag campagne',     required: false },
+  { key: 'notes',           label: 'Notes',            required: false },
+  { key: 'follow_up_date',  label: 'Date de relance',  required: false },
+  { key: 'follow_up_level', label: 'Niveau de relance', required: false },
+];
+
+const FIELD_ALIASES: Record<TargetField, string[]> = {
+  first_name:      ['first_name', 'firstname', 'prenom', 'first'],
+  last_name:       ['last_name', 'lastname', 'nom', 'last', 'name'],
+  linkedin_url:    ['linkedin_url', 'url', 'linkedin', 'profil_linkedin'],
+  company_name:    ['company_name', 'company', 'entreprise', 'societe'],
+  job_title:       ['job_title', 'title', 'poste', 'fonction', 'titre'],
+  status:          ['status', 'statut'],
+  outreach_type:   ['outreach_type', 'type_contact', 'canal'],
+  source_type:     ['source_type', 'source'],
+  campaign_tag:    ['campaign_tag', 'campagne', 'tag'],
+  notes:           ['notes', 'note', 'commentaire', 'commentaires'],
+  follow_up_date:  ['follow_up_date', 'date_relance'],
+  follow_up_level: ['follow_up_level', 'niveau_relance'],
+};
+
+type ColumnMapping = Record<TargetField, number>; // column index, -1 = not mapped
+
+function normalizeHeader(h: string): string {
+  return h
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // é→e, ç→c, etc. avant de filtrer les accents
+    .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+/* Pre-fill the mapping modal with a best-effort guess — the user still confirms/adjusts it. */
+function guessMapping(headers: string[]): ColumnMapping {
+  const normalized = headers.map(normalizeHeader);
+  const mapping = {} as ColumnMapping;
+  for (const field of TARGET_FIELDS) {
+    mapping[field.key] = normalized.findIndex((n) => FIELD_ALIASES[field.key].includes(n));
+  }
+  return mapping;
+}
+
+function applyMapping(rows: string[][], mapping: ColumnMapping): Record<string, string>[] {
+  return rows.map((values) => {
+    const row: Record<string, string> = {};
+    for (const field of TARGET_FIELDS) {
+      const idx = mapping[field.key];
+      row[field.key] = idx >= 0 ? (values[idx] ?? '').trim() : '';
+    }
+    return row;
+  });
+}
+
+/* ─── CSV parser (handles quoted fields with commas) ─── */
+function splitCsvLine(line: string): string[] {
+  return line
+    .split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    .map((v) => v.trim().replace(/^"|"$/g, ''));
+}
+
+function parseCsvRaw(text: string): { headers: string[]; rows: string[][] } {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return { headers: [], rows: [] };
+  return {
+    headers: splitCsvLine(lines[0]),
+    rows: lines.slice(1).map(splitCsvLine),
+  };
+}
 
 interface LeadImportExportProps {
   leads: Lead[];
@@ -40,6 +123,11 @@ export function LeadImportExport({ leads, personaMap }: LeadImportExportProps) {
   const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importResult, setImportResult] = useState<{ success: number; skipped: number; errors: string[] } | null>(null);
+
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping>(() => guessMapping([]));
+  const [showMappingModal, setShowMappingModal] = useState(false);
 
   // --- EXPORT ---
   const handleExport = () => {
@@ -74,58 +162,45 @@ export function LeadImportExport({ leads, personaMap }: LeadImportExportProps) {
   };
 
   // --- IMPORT ---
-  const parseCsv = (text: string): Record<string, string>[] => {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map((h) => h.trim().replace(/^"(.*)"$/, '$1'));
-    return lines.slice(1).map((line) => {
-      const values: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inQuotes) {
-          if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-          else if (ch === '"') { inQuotes = false; }
-          else { current += ch; }
-        } else {
-          if (ch === '"') { inQuotes = true; }
-          else if (ch === ',') { values.push(current.trim()); current = ''; }
-          else { current += ch; }
-        }
-      }
-      values.push(current.trim());
-      const row: Record<string, string> = {};
-      headers.forEach((h, i) => { row[h] = values[i] || ''; });
-      return row;
-    });
-  };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const rows = parseCsv(text);
-      const errors: string[] = [];
-      rows.forEach((row, i) => {
-        if (!row.first_name?.trim()) errors.push(`Ligne ${i + 2}: first_name manquant`);
-        if (!row.last_name?.trim()) errors.push(`Ligne ${i + 2}: last_name manquant`);
-        if (row.status && !VALID_STATUSES.includes(row.status as LeadStatus)) {
-          errors.push(`Ligne ${i + 2}: statut invalide "${row.status}"`);
-        }
-        if (row.outreach_type && !VALID_OUTREACH.includes(row.outreach_type)) {
-          errors.push(`Ligne ${i + 2}: outreach_type invalide "${row.outreach_type}"`);
-        }
-      });
-      setPreview(rows);
-      setImportErrors(errors);
-      setImportResult(null);
-      setImportOpen(true);
+      const { headers, rows } = parseCsvRaw(text);
+      if (headers.length === 0 || rows.length === 0) {
+        toast({ variant: 'destructive', title: 'Fichier vide ou invalide' });
+        return;
+      }
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+      setColumnMapping(guessMapping(headers));
+      setShowMappingModal(true);
     };
     reader.readAsText(file);
-    e.target.value = '';
+    e.target.value = ''; // allow re-selecting the same file to re-open the mapping modal
+  };
+
+  const confirmMapping = () => {
+    if (columnMapping.first_name < 0 || columnMapping.last_name < 0) return;
+    const rows = applyMapping(csvRows, columnMapping);
+    const errors: string[] = [];
+    rows.forEach((row, i) => {
+      if (!row.first_name?.trim()) errors.push(`Ligne ${i + 2}: prénom manquant`);
+      if (!row.last_name?.trim()) errors.push(`Ligne ${i + 2}: nom manquant`);
+      if (row.status && !VALID_STATUSES.includes(row.status as LeadStatus)) {
+        errors.push(`Ligne ${i + 2}: statut invalide "${row.status}"`);
+      }
+      if (row.outreach_type && !VALID_OUTREACH.includes(row.outreach_type)) {
+        errors.push(`Ligne ${i + 2}: outreach_type invalide "${row.outreach_type}"`);
+      }
+    });
+    setPreview(rows);
+    setImportErrors(errors);
+    setImportResult(null);
+    setShowMappingModal(false);
+    setImportOpen(true);
   };
 
   const handleImport = async () => {
@@ -193,6 +268,56 @@ export function LeadImportExport({ leads, personaMap }: LeadImportExportProps) {
         <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileSelect} />
       </div>
 
+      {/* ─── Column mapping modal ─── */}
+      <Dialog open={showMappingModal} onOpenChange={setShowMappingModal}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Faire correspondre les colonnes</DialogTitle>
+            <DialogDescription>
+              Associez les colonnes de votre fichier aux champs attendus par SetterFlow.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {TARGET_FIELDS.map((f) => (
+              <div key={f.key} className="flex items-center justify-between gap-3">
+                <Label className="text-sm">
+                  {f.label} {f.required && <span className="text-destructive">*</span>}
+                </Label>
+                <Select
+                  value={String(columnMapping[f.key])}
+                  onValueChange={(v) => setColumnMapping((prev) => ({ ...prev, [f.key]: Number(v) }))}
+                >
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Non mappé" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!f.required && <SelectItem value="-1">Non mappé</SelectItem>}
+                    {csvHeaders.map((h, i) => (
+                      <SelectItem key={i} value={String(i)}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+
+          {csvRows.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/20 p-2.5 text-xs text-muted-foreground overflow-hidden">
+              <p className="mb-1 font-medium text-foreground">Aperçu de la 1ère ligne</p>
+              <p className="truncate font-mono">{csvRows[0].join(' · ')}</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMappingModal(false)}>Annuler</Button>
+            <Button onClick={confirmMapping} disabled={columnMapping.first_name < 0 || columnMapping.last_name < 0}>
+              Valider le mapping
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
@@ -233,7 +358,14 @@ export function LeadImportExport({ leads, personaMap }: LeadImportExportProps) {
                 </div>
               )}
 
-              <p className="text-sm text-muted-foreground">{preview.length} lignes détectées</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">{preview.length} lignes détectées</p>
+                {csvHeaders.length > 0 && (
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowMappingModal(true)}>
+                    Modifier le mapping des colonnes
+                  </button>
+                )}
+              </div>
 
               {preview.length > 0 && (
                 <div className="rounded border overflow-x-auto max-h-60 overflow-y-auto">
