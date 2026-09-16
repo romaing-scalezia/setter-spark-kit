@@ -90,7 +90,9 @@ const FIELD_ALIASES: Record<TargetField, string[]> = {
 type ColumnMapping = Record<TargetField, number>; // column index, -1 = not mapped
 
 function normalizeHeader(h: string): string {
-  return h.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return h
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // é→e, ç→c, etc. avant de filtrer les accents
+    .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 }
 
 /* Pre-fill the mapping modal with a best-effort guess — the user still confirms/adjusts it. */
