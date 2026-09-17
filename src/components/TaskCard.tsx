@@ -34,6 +34,8 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, onRdvWon, onR
   const meta = PRIORITY_META[task.effectivePriority];
   const due = new Date(task.due_date);
   const overdue = isPast(due) && !isToday(due);
+  const snoozedUntilDate = task.snoozed_until ? new Date(task.snoozed_until) : null;
+  const isSnoozed = !!snoozedUntilDate && !(isPast(snoozedUntilDate) && !isToday(snoozedUntilDate));
   const lead = task.lead;
   const leadName = lead ? `${lead.first_name} ${lead.last_name}` : 'Lead supprimé';
   const chatId = (lead as any)?.unipile_chat_id as string | null | undefined;
@@ -68,6 +70,12 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, onRdvWon, onR
             {lead && (lead as any).follow_up_level > 0 && (
               <span className="inline-flex items-center rounded-full bg-orange-100 px-1.5 py-0 text-[10px] font-medium text-orange-700">
                 FU {(lead as any).follow_up_level}
+              </span>
+            )}
+            {isSnoozed && snoozedUntilDate && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+                <AlarmClockOff className="h-2.5 w-2.5" />
+                Snoozée jusqu'au {format(snoozedUntilDate, 'dd MMM', { locale: fr })}
               </span>
             )}
           </div>

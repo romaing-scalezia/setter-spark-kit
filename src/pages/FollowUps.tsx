@@ -90,7 +90,6 @@ export default function FollowUps() {
   const enriched: EnrichedTask[] = useMemo(() => {
     return tasks.map((t) => {
       const lead = leadMap.get(t.lead_id) || null;
-      // hide snoozed-into-the-future tasks
       const effectivePriority = computeEffectivePriority(t, (lead as any)?.follow_up_level);
       return { ...t, lead, effectivePriority };
     });
@@ -99,8 +98,10 @@ export default function FollowUps() {
   const visible = useMemo(() => {
     const now = startOfDay(new Date());
     return enriched.filter((t) => {
-      // snooze: hide until snoozed_until passes
-      if (t.snoozed_until && new Date(t.snoozed_until) > now) return false;
+      // Une tache snoozee reste visible (badge "Snoozee jusqu'au X" sur la
+      // carte) — son due_date (aligne sur snoozed_until au moment du report)
+      // la place naturellement dans le bon onglet (Aujourd'hui/Semaine) une
+      // fois la date de report arrivee.
       const due = new Date(t.due_date);
 
       if (bucket === 'overdue' && !(isPast(due) && !isToday(due))) return false;
@@ -116,25 +117,21 @@ export default function FollowUps() {
 
   const sorted = useMemo(() => sortByPriority(visible), [visible]);
 
-  // Counters (independent of filters except snooze)
-  const visibleAll = useMemo(() => {
-    const now = startOfDay(new Date());
-    return enriched.filter((t) => !t.snoozed_until || new Date(t.snoozed_until) <= now);
-  }, [enriched]);
+  // Counters (independent of filters)
   const counts = useMemo(() => {
     const now = startOfDay(new Date());
     return {
-      all: visibleAll.length,
-      overdue: visibleAll.filter((t) => {
+      all: enriched.length,
+      overdue: enriched.filter((t) => {
         const d = new Date(t.due_date);
         return isPast(d) && !isToday(d);
       }).length,
-      today: visibleAll.filter((t) => isToday(new Date(t.due_date))).length,
-      week: visibleAll.filter((t) =>
+      today: enriched.filter((t) => isToday(new Date(t.due_date))).length,
+      week: enriched.filter((t) =>
         isWithinInterval(new Date(t.due_date), { start: now, end: endOfWeek(now, { weekStartsOn: 1 }) })
       ).length,
     };
-  }, [visibleAll]);
+  }, [enriched]);
 
   const completeMutation = useMutation({
     mutationFn: async (task: EnrichedTask) => {
