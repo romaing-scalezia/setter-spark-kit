@@ -94,96 +94,20 @@ export function scoreLead(lead: Lead): LeadScore {
   return { score, temperature, signals };
 }
 
-// ── Priority Actions ─────────────────────────────────────
-export type PriorityLevel = 'urgent' | 'important' | 'opportunity';
-
-export interface PriorityAction {
+// ── Hot opportunities ─────────────────────────────────────
+// Signal display-only : un lead chaud proche du booking. Ne passe pas par le
+// systeme de tasks (pas de date d'echeance naturelle), donc pas de
+// fait/plus-tard/historique dessus — juste un encart informatif sur le
+// dashboard, a cote des vraies actions (tasks).
+export interface HotOpportunity {
   lead: Lead;
-  level: PriorityLevel;
   reason: string;
-  action: string;
-  score: number;
 }
 
-export function getPriorityActions(leads: Lead[]): PriorityAction[] {
-  const now = new Date();
-  const actions: PriorityAction[] = [];
-  const activeLeads = leads.filter((l) => !['ferme_perdu', 'non_qualifie'].includes(l.status));
-
-  for (const lead of activeLeads) {
-    const leadScore = scoreLead(lead);
-
-    // URGENT: Follow-up en retard
-    if (lead.status === 'follow_up' && lead.follow_up_date && isBefore(new Date(lead.follow_up_date), startOfDay(now))) {
-      actions.push({
-        lead, level: 'urgent',
-        reason: 'Follow-up en retard',
-        action: 'Relancer immédiatement',
-        score: leadScore.score,
-      });
-      continue;
-    }
-
-    // URGENT: Appel proposé non booké depuis > 3 jours
-    if (lead.status === 'appel_propose' && lead.call_proposed_at) {
-      const daysSinceCall = differenceInDays(now, new Date(lead.call_proposed_at));
-      if (daysSinceCall > 3) {
-        actions.push({
-          lead, level: 'urgent',
-          reason: `Appel proposé il y a ${daysSinceCall}j sans booking`,
-          action: 'Relancer ou reprogrammer',
-          score: leadScore.score,
-        });
-        continue;
-      }
-    }
-
-    // IMPORTANT: Follow-up aujourd'hui
-    if (lead.status === 'follow_up' && lead.follow_up_date) {
-      const fuDate = new Date(lead.follow_up_date);
-      const fuDay = startOfDay(fuDate);
-      const today = startOfDay(now);
-      if (fuDay.getTime() === today.getTime()) {
-        actions.push({
-          lead, level: 'important',
-          reason: 'Follow-up prévu aujourd\'hui',
-          action: 'Envoyer le message',
-          score: leadScore.score,
-        });
-        continue;
-      }
-    }
-
-    // IMPORTANT: Lead bloqué > 7 jours
-    if (lead.last_status_change_at) {
-      const daysSinceChange = differenceInDays(now, new Date(lead.last_status_change_at));
-      if (daysSinceChange > 7 && ['conversation_engagee', 'en_cours'].includes(lead.status)) {
-        actions.push({
-          lead, level: 'important',
-          reason: `Pas d'évolution depuis ${daysSinceChange}j`,
-          action: lead.status === 'conversation_engagee' ? 'Relancer ou qualifier' : 'Proposer un appel',
-          score: leadScore.score,
-        });
-        continue;
-      }
-    }
-
-    // OPPORTUNITY: Hot leads
-    if (leadScore.temperature === 'hot' && lead.status === 'appel_propose') {
-      actions.push({
-        lead, level: 'opportunity',
-        reason: 'Lead chaud, proche du booking',
-        action: 'Confirmer le RDV',
-        score: leadScore.score,
-      });
-    }
-  }
-
-  // Sort: urgent first, then important, then opportunity; within each level, by score desc
-  const levelOrder: Record<PriorityLevel, number> = { urgent: 0, important: 1, opportunity: 2 };
-  actions.sort((a, b) => levelOrder[a.level] - levelOrder[b.level] || b.score - a.score);
-
-  return actions;
+export function getHotOpportunities(leads: Lead[]): HotOpportunity[] {
+  return leads
+    .filter((lead) => lead.status === 'appel_propose' && scoreLead(lead).temperature === 'hot')
+    .map((lead) => ({ lead, reason: 'Lead chaud, proche du booking' }));
 }
 
 // ── User Alerts ──────────────────────────────────────────
@@ -337,10 +261,4 @@ export const TEMPERATURE_CONFIG: Record<LeadTemperature, { label: string; emoji:
   hot:  { label: 'Chaud', emoji: '🔥', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   warm: { label: 'Tiède', emoji: '🟡', className: 'bg-warning/10 text-warning border-warning/20' },
   cold: { label: 'Froid', emoji: '❄️', className: 'bg-muted text-muted-foreground border-border' },
-};
-
-export const PRIORITY_CONFIG: Record<PriorityLevel, { label: string; className: string; dotClassName: string }> = {
-  urgent: { label: 'Urgent', className: 'border-destructive/30 bg-destructive/5', dotClassName: 'bg-destructive' },
-  important: { label: 'Important', className: 'border-amber-300/50 bg-amber-50', dotClassName: 'bg-amber-500' },
-  opportunity: { label: 'Opportunité', className: 'border-primary/30 bg-primary/5', dotClassName: 'bg-primary' },
 };

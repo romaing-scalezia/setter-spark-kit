@@ -26,11 +26,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Lead, LeadStatus } from '@/lib/constants';
 import { SCORE_WEIGHTS_LABELS } from '@/lib/constants';
-import { getPriorityActions, PRIORITY_CONFIG } from '@/lib/leadScoring';
+import { getHotOpportunities, TEMPERATURE_CONFIG } from '@/lib/leadScoring';
 import { SetterBreakdownCard } from '@/components/SetterBreakdownCard';
 import { useTeammates } from '@/hooks/useTeammates';
-import { TEMPERATURE_CONFIG } from '@/lib/leadScoring';
 import { formatDistanceToNow } from 'date-fns';
+import { TaskCard, type EnrichedTask } from '@/components/TaskCard';
+import { TaskActionDialogs } from '@/components/TaskActionDialogs';
+import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
+import { useTaskActions } from '@/hooks/useTaskActions';
+import { computeEffectivePriority, sortByPriority, type Task } from '@/lib/tasks';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -44,7 +48,13 @@ export default function Dashboard() {
   const [dealLeadId, setDealLeadId] = useState('');
   const [dealAmount, setDealAmount] = useState('');
   const [createLeadOpen, setCreateLeadOpen] = useState(false);
-  const [skippedLeadIds, setSkippedLeadIds] = useState<Set<string>>(new Set());
+  const taskActions = useTaskActions();
+  const { completeMutation, rdvPostponeMutation } = taskActions;
+  const [openLead, setOpenLead] = useState<Lead | null>(null);
+  const [snoozeTask, setSnoozeTask] = useState<EnrichedTask | null>(null);
+  const [snoozeDate, setSnoozeDate] = useState<Date | undefined>(undefined);
+  const [rdvWonTask, setRdvWonTask] = useState<EnrichedTask | null>(null);
+  const [rdvLostTask, setRdvLostTask] = useState<EnrichedTask | null>(null);
   const [revenueListOpen, setRevenueListOpen] = useState(false);
   const [clientsListOpen, setClientsListOpen] = useState(false);
 
@@ -53,6 +63,21 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data } = await supabase.from('leads').select('*').eq('owner_id', user!.id);
       return (data || []) as Lead[];
+    },
+    enabled: !!user,
+  });
+
+  const { data: pendingTasks = [] } = useQuery({
+    queryKey: ['dashboard-tasks', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user!.id)
+        .eq('status', 'pending')
+        .order('due_date', { ascending: true });
+      if (error) throw error;
+      return (data || []) as Task[];
     },
     enabled: !!user,
   });
@@ -178,16 +203,19 @@ export default function Dashboard() {
     return `${format(start, 'd MMM', { locale: fr })} → ${format(end, 'd MMM', { locale: fr })}`;
   }, []);
 
-  const priorityActions = useMemo(
-    () => getPriorityActions(filteredLeads).filter((pa) => !skippedLeadIds.has(pa.lead.id)),
-    [filteredLeads, skippedLeadIds],
-  );
+  const enrichedTasks: EnrichedTask[] = useMemo(() => {
+    return pendingTasks.map((t) => {
+      const lead = leadById.get(t.lead_id) || null;
+      const effectivePriority = computeEffectivePriority(t, (lead as any)?.follow_up_level);
+      return { ...t, lead, effectivePriority };
+    });
+  }, [pendingTasks, leadById]);
 
-  const skipLead = (id: string) =>
-    setSkippedLeadIds((prev) => new Set([...prev, id]));
+  const sortedTasks = useMemo(() => sortByPriority(enrichedTasks), [enrichedTasks]);
+  const mainTask = sortedTasks[0] ?? null;
+  const secondaryTasks = sortedTasks.slice(1, 3);
 
-  const mainAction = priorityActions[0] ?? null;
-  const secondaryActions = priorityActions.slice(1, 3);
+  const hotOpportunities = useMemo(() => getHotOpportunities(filteredLeads), [filteredLeads]);
 
   return (
     <AppLayout>
@@ -221,64 +249,62 @@ export default function Dashboard() {
         </div>
 
         {/* Ta prochaine action */}
-        {mainAction && (
+        {(mainTask || hotOpportunities.length > 0) && (
           <Card className="border-primary/30">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Ta prochaine action
                 </CardTitle>
-                {priorityActions.length > 1 && (
+                {sortedTasks.length > 1 && (
                   <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    {priorityActions.length - 1} en attente
+                    {sortedTasks.length - 1} en attente
                   </span>
                 )}
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Lead principal */}
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-sm text-foreground">
-                    {(mainAction.lead.first_name?.[0] ?? '?').toUpperCase()}
-                    {(mainAction.lead.last_name?.[0] ?? '').toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground">
-                      {mainAction.lead.first_name} {mainAction.lead.last_name}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {mainAction.reason}
-                      {(mainAction.lead as any).score != null && (
-                        <> • {TEMPERATURE_CONFIG[mainAction.lead.score >= 50 ? 'hot' : mainAction.lead.score >= 25 ? 'warm' : 'cold'].emoji} score {(mainAction.lead as any).score}</>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link to={`/inbox${(mainAction.lead as any).unipile_chat_id ? `?chat=${(mainAction.lead as any).unipile_chat_id}` : ''}`}>
-                    <Button size="sm">Ouvrir la conversation</Button>
-                  </Link>
-                  <Button size="sm" variant="outline" onClick={() => skipLead(mainAction.lead.id)}>
-                    Plus tard
-                  </Button>
-                </div>
-              </div>
+            <CardContent className="space-y-3">
+              {mainTask && (
+                <TaskCard
+                  task={mainTask}
+                  onComplete={(task, completedAt) => completeMutation.mutate({ task, completedAt })}
+                  onSnooze={(task) => { setSnoozeTask(task); setSnoozeDate(undefined); }}
+                  onOpenLead={(task) => task.lead && setOpenLead(task.lead)}
+                  onRdvWon={(task) => setRdvWonTask(task)}
+                  onRdvLost={(task) => setRdvLostTask(task)}
+                  onRdvPostpone={(task) => rdvPostponeMutation.mutate(task)}
+                  isUpdating={completeMutation.isPending && completeMutation.variables?.task.id === mainTask.id}
+                />
+              )}
 
               {/* Actions secondaires */}
-              {secondaryActions.length > 0 && (
+              {secondaryTasks.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2 pt-2 border-t">
-                  {secondaryActions.map((pa, i) => (
-                    <div key={`${pa.lead.id}-${i}`} className="flex items-center gap-3 rounded-lg border border-primary/30 p-3">
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${PRIORITY_CONFIG[pa.level].className}`}>
-                        {PRIORITY_CONFIG[pa.level].label}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {pa.lead.first_name} {pa.lead.last_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{pa.reason}</p>
-                      </div>
+                  {secondaryTasks.map((t) => (
+                    <TaskCard
+                      key={t.id}
+                      task={t}
+                      compact
+                      onComplete={(task, completedAt) => completeMutation.mutate({ task, completedAt })}
+                      onSnooze={(task) => { setSnoozeTask(task); setSnoozeDate(undefined); }}
+                      onOpenLead={(task) => task.lead && setOpenLead(task.lead)}
+                      onRdvWon={(task) => setRdvWonTask(task)}
+                      onRdvLost={(task) => setRdvLostTask(task)}
+                      onRdvPostpone={(task) => rdvPostponeMutation.mutate(task)}
+                      isUpdating={completeMutation.isPending && completeMutation.variables?.task.id === t.id}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Opportunites (signal informatif, pas une task) */}
+              {hotOpportunities.length > 0 && (
+                <div className={mainTask ? 'space-y-1.5 border-t pt-3' : 'space-y-1.5'}>
+                  {hotOpportunities.map((op) => (
+                    <div key={op.lead.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{TEMPERATURE_CONFIG.hot.emoji}</span>
+                      <span className="font-medium text-foreground">{op.lead.first_name} {op.lead.last_name}</span>
+                      <span>· {op.reason}</span>
                     </div>
                   ))}
                 </div>
@@ -457,6 +483,24 @@ export default function Dashboard() {
       </Dialog>
 
       <CreateLeadModal open={createLeadOpen} onOpenChange={setCreateLeadOpen} onSubmit={handleCreateLead} />
+
+      <LeadDetailDrawer
+        lead={openLead}
+        open={!!openLead}
+        onOpenChange={(o) => !o && setOpenLead(null)}
+      />
+
+      <TaskActionDialogs
+        actions={taskActions}
+        snoozeTask={snoozeTask}
+        setSnoozeTask={setSnoozeTask}
+        snoozeDate={snoozeDate}
+        setSnoozeDate={setSnoozeDate}
+        rdvWonTask={rdvWonTask}
+        setRdvWonTask={setRdvWonTask}
+        rdvLostTask={rdvLostTask}
+        setRdvLostTask={setRdvLostTask}
+      />
     </AppLayout>
   );
 }

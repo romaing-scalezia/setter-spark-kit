@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, CheckCircle2, Clock, AlarmClockOff, Eye, Loader2, Trophy, XCircle, CalendarClock } from 'lucide-react';
-import { format, isPast, isToday } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ExternalLink, CheckCircle2, Clock, AlarmClockOff, Eye, Loader2, Trophy, XCircle, CalendarClock, ChevronDown } from 'lucide-react';
+import { format, isPast, isToday, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import {
   PRIORITY_META,
   TASK_TYPE_LABELS,
@@ -19,7 +23,7 @@ export interface EnrichedTask extends Task {
 
 interface TaskCardProps {
   task: EnrichedTask;
-  onComplete: (task: EnrichedTask) => void;
+  onComplete: (task: EnrichedTask, completedAt: Date) => void;
   onSnooze?: (task: EnrichedTask) => void;
   onOpenLead: (task: EnrichedTask) => void;
   onRdvWon?: (task: EnrichedTask) => void;
@@ -31,6 +35,8 @@ interface TaskCardProps {
 
 export function TaskCard({ task, onComplete, onSnooze, onOpenLead, onRdvWon, onRdvLost, onRdvPostpone, isUpdating, compact }: TaskCardProps) {
   const navigate = useNavigate();
+  const [backdatePickerOpen, setBackdatePickerOpen] = useState(false);
+  const [backdate, setBackdate] = useState<Date | undefined>(undefined);
   const meta = PRIORITY_META[task.effectivePriority];
   const due = new Date(task.due_date);
   const overdue = isPast(due) && !isToday(due);
@@ -169,20 +175,57 @@ export function TaskCard({ task, onComplete, onSnooze, onOpenLead, onRdvWon, onR
                 <AlarmClockOff className="h-3.5 w-3.5" />
               </Button>
             )}
-            <Button
-              size="sm"
-              variant="default"
-              className="h-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                onComplete(task);
-              }}
-              disabled={isUpdating}
-              data-testid={`task-complete-${task.id}`}
-            >
-              {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {!compact && <span className="ml-1">Fait</span>}
-            </Button>
+            <div className="flex items-stretch" onClick={(e) => e.stopPropagation()}>
+              <Button
+                size="sm"
+                variant="default"
+                className="h-8 rounded-r-none"
+                onClick={() => onComplete(task, new Date())}
+                disabled={isUpdating}
+                data-testid={`task-complete-${task.id}`}
+              >
+                {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                {!compact && <span className="ml-1">Fait</span>}
+              </Button>
+              <Popover open={backdatePickerOpen} onOpenChange={setBackdatePickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-8 w-6 rounded-l-none border-l border-primary-foreground/20 px-0"
+                    disabled={isUpdating}
+                    title="Marquer fait à une autre date"
+                    data-testid={`task-complete-backdate-${task.id}`}
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="end">
+                  <p className="mb-2 text-xs text-muted-foreground">Marquer fait à cette date :</p>
+                  <Calendar
+                    mode="single"
+                    selected={backdate}
+                    onSelect={setBackdate}
+                    disabled={(d) => d > startOfDay(new Date())}
+                    className={cn('p-0 pointer-events-auto')}
+                    locale={fr}
+                  />
+                  <Button
+                    size="sm"
+                    className="mt-2 w-full"
+                    disabled={!backdate}
+                    onClick={() => {
+                      if (!backdate) return;
+                      onComplete(task, backdate);
+                      setBackdatePickerOpen(false);
+                      setBackdate(undefined);
+                    }}
+                  >
+                    Valider
+                  </Button>
+                </PopoverContent>
+              </Popover>
+            </div>
           </>
         )}
       </div>

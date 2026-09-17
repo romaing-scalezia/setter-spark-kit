@@ -1,20 +1,16 @@
 import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/AppLayout';
 import { TaskCard, type EnrichedTask } from '@/components/TaskCard';
 import { LeadDetailDrawer } from '@/components/LeadDetailDrawer';
-import { CloseWonModal } from '@/components/CloseWonModal';
-import { ReasonModal } from '@/components/ReasonModal';
+import { TaskActionDialogs } from '@/components/TaskActionDialogs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
 import { ListTodo, Loader2 } from 'lucide-react';
+import { useTaskActions } from '@/hooks/useTaskActions';
 import {
   computeEffectivePriority,
   sortByPriority,
@@ -29,20 +25,16 @@ import {
   isPast,
   isThisWeek,
   startOfDay,
-  format,
   isWithinInterval,
   endOfWeek,
-  addDays,
 } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { fr } from 'date-fns/locale';
 
 type Bucket = 'all' | 'overdue' | 'today' | 'week';
 
 export default function FollowUps() {
   const { user } = useAuth();
-  const qc = useQueryClient();
-  const { toast } = useToast();
+  const actions = useTaskActions();
+  const { completeMutation, rdvPostponeMutation } = actions;
 
   const [bucket, setBucket] = useState<Bucket>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | TaskPriority>('all');
@@ -133,125 +125,6 @@ export default function FollowUps() {
     };
   }, [enriched]);
 
-  const completeMutation = useMutation({
-    mutationFn: async (task: EnrichedTask) => {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', task.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
-      toast({ title: 'Tâche marquée comme faite' });
-    },
-    onError: (e: Error) =>
-      toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
-  const snoozeMutation = useMutation({
-    mutationFn: async ({ task, until }: { task: EnrichedTask; until: Date }) => {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ snoozed_until: format(until, 'yyyy-MM-dd'), due_date: format(until, 'yyyy-MM-dd') })
-        .eq('id', task.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
-      setSnoozeTask(null);
-      setSnoozeDate(undefined);
-      toast({ title: 'Tâche reportée' });
-    },
-    onError: (e: Error) =>
-      toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
-  const rdvWonMutation = useMutation({
-    mutationFn: async ({ task, amount }: { task: EnrichedTask; amount: number }) => {
-      if (!task.lead) throw new Error('Lead introuvable');
-      const { error: dealError } = await supabase.from('deals').insert({
-        lead_id: task.lead.id,
-        owner_id: task.lead.owner_id,
-        amount,
-        status: 'won',
-      });
-      if (dealError) throw dealError;
-      const { error: leadError } = await supabase
-        .from('leads')
-        .update({ status: 'ferme_gagne', last_status_change_at: new Date().toISOString() })
-        .eq('id', task.lead.id);
-      if (leadError) throw leadError;
-      await supabase.from('lead_events').insert({
-        lead_id: task.lead.id, user_id: user!.id, event_type: 'status_changed',
-        old_value: task.lead.status, new_value: 'ferme_gagne',
-        metadata: { amount },
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-leads'] });
-      setRdvWonTask(null);
-      toast({ title: 'Deal gagné 🎉' });
-    },
-    onError: (e: Error) =>
-      toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
-  const rdvLostMutation = useMutation({
-    mutationFn: async ({ task, reason, detail }: { task: EnrichedTask; reason: string; detail?: string }) => {
-      if (!task.lead) throw new Error('Lead introuvable');
-      const { error } = await supabase
-        .from('leads')
-        .update({
-          status: 'ferme_perdu',
-          last_status_change_at: new Date().toISOString(),
-          closed_lost_at: new Date().toISOString(),
-          loss_reason: reason,
-          reason_detail: detail || null,
-          meeting_booked_at: null,
-          date_rdv: null,
-        })
-        .eq('id', task.lead.id);
-      if (error) throw error;
-      await supabase.from('lead_events').insert({
-        lead_id: task.lead.id, user_id: user!.id, event_type: 'status_changed',
-        old_value: task.lead.status, new_value: 'ferme_perdu',
-        metadata: { loss_reason: reason, reason_detail: detail ?? null },
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-leads'] });
-      qc.invalidateQueries({ queryKey: ['lead-events'] });
-      setRdvLostTask(null);
-      toast({ title: 'Lead marqué comme perdu' });
-    },
-    onError: (e: Error) =>
-      toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
-  const rdvPostponeMutation = useMutation({
-    mutationFn: async (task: EnrichedTask) => {
-      const until = format(addDays(new Date(), 7), 'yyyy-MM-dd');
-      const { error } = await supabase.from('tasks').update({ due_date: until }).eq('id', task.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-tasks'] });
-      toast({ title: 'Reporté à J+7' });
-    },
-    onError: (e: Error) =>
-      toast({ variant: 'destructive', title: 'Erreur', description: e.message }),
-  });
-
   return (
     <AppLayout>
       <div className="p-4 sm:p-6 space-y-4" data-testid="page-follow-ups">
@@ -329,7 +202,7 @@ export default function FollowUps() {
                   <TaskCard
                     key={t.id}
                     task={t}
-                    onComplete={(task) => completeMutation.mutate(task)}
+                    onComplete={(task, completedAt) => completeMutation.mutate({ task, completedAt })}
                     onSnooze={(task) => {
                       setSnoozeTask(task);
                       setSnoozeDate(undefined);
@@ -338,7 +211,7 @@ export default function FollowUps() {
                     onRdvWon={(task) => setRdvWonTask(task)}
                     onRdvLost={(task) => setRdvLostTask(task)}
                     onRdvPostpone={(task) => rdvPostponeMutation.mutate(task)}
-                    isUpdating={completeMutation.isPending && completeMutation.variables?.id === t.id}
+                    isUpdating={completeMutation.isPending && completeMutation.variables?.task.id === t.id}
                   />
                 ))}
               </div>
@@ -354,46 +227,16 @@ export default function FollowUps() {
         onOpenChange={(o) => !o && setOpenLead(null)}
       />
 
-      {/* Snooze dialog */}
-      <Dialog open={!!snoozeTask} onOpenChange={(o) => !o && setSnoozeTask(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Reporter à...</DialogTitle>
-          </DialogHeader>
-          <div className="flex justify-center">
-            <Calendar
-              mode="single"
-              selected={snoozeDate}
-              onSelect={setSnoozeDate}
-              disabled={(d) => d <= startOfDay(new Date())}
-              className={cn('p-3 pointer-events-auto')}
-              locale={fr}
-            />
-          </div>
-          <Button
-            disabled={!snoozeDate || snoozeMutation.isPending}
-            onClick={() => snoozeTask && snoozeDate && snoozeMutation.mutate({ task: snoozeTask, until: snoozeDate })}
-            className="w-full"
-          >
-            {snoozeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Reporter
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* RDV outcome: won / lost */}
-      <CloseWonModal
-        open={!!rdvWonTask}
-        onOpenChange={(o) => !o && setRdvWonTask(null)}
-        lead={rdvWonTask?.lead ?? null}
-        onSubmit={(amount) => rdvWonTask && rdvWonMutation.mutate({ task: rdvWonTask, amount })}
-        isPending={rdvWonMutation.isPending}
-      />
-      <ReasonModal
-        open={!!rdvLostTask}
-        onOpenChange={(o) => !o && setRdvLostTask(null)}
-        type="loss"
-        onSubmit={(reason, detail) => rdvLostTask && rdvLostMutation.mutate({ task: rdvLostTask, reason, detail })}
+      <TaskActionDialogs
+        actions={actions}
+        snoozeTask={snoozeTask}
+        setSnoozeTask={setSnoozeTask}
+        snoozeDate={snoozeDate}
+        setSnoozeDate={setSnoozeDate}
+        rdvWonTask={rdvWonTask}
+        setRdvWonTask={setRdvWonTask}
+        rdvLostTask={rdvLostTask}
+        setRdvLostTask={setRdvLostTask}
       />
     </AppLayout>
   );
