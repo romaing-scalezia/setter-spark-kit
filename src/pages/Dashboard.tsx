@@ -271,7 +271,7 @@ export default function Dashboard() {
                   {secondaryActions.map((pa, i) => (
                     <div key={`${pa.lead.id}-${i}`} className="flex items-center gap-3 rounded-lg border border-primary/30 p-3">
                       <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${PRIORITY_CONFIG[pa.level].className}`}>
-                        {pa.level === 'high' ? 'Urgent' : 'Medium'}
+                        {PRIORITY_CONFIG[pa.level].label}
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">
