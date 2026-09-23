@@ -67,7 +67,7 @@ export function LinkedInIntegrationCard() {
     if (!user) return;
     setBusy(true);
     const { error } = await (supabase.from('unipile_accounts' as any) as any)
-      .delete()
+      .update({ status: 'disconnected', updated_at: new Date().toISOString() })
       .eq('user_id', user.id);
     if (error) {
       toast({ variant: 'destructive', title: 'Erreur', description: error.message });
