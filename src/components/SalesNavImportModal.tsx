@@ -108,8 +108,13 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
     setReauthAccountId(null);
 
     try {
+      // limit plafonne volontairement bas : l'edge function pagine par lots de 100
+      // avec une pause anti-scraping entre chaque page, donc demander 2500 d'un
+      // coup pouvait depasser le timeout de connexion et fermer la requete avant
+      // la reponse ("connection closed before message completed"). "Charger plus"
+      // recupere le reste par lots du meme calibre.
       const { data, error } = await supabase.functions.invoke('sales-nav-import', {
-        body: { action: 'preview', url: url.trim(), limit: 2500 },
+        body: { action: 'preview', url: url.trim(), limit: 500 },
       });
 
       if (error) {
@@ -146,7 +151,7 @@ export function SalesNavImportModal({ open, onClose, onImported }: Props) {
     setLoadingMore(true);
     try {
       const { data, error } = await supabase.functions.invoke('sales-nav-import', {
-        body: { action: 'preview', url: currentUrl, limit: 2500, cursor: nextCursor },
+        body: { action: 'preview', url: currentUrl, limit: 500, cursor: nextCursor },
       });
 
       if (error) {
