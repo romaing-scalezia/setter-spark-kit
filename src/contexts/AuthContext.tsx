@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<MembershipPlan>('free');
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus>('trialing');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
-  const [prospectQuota, setProspectQuota] = useState<ProspectQuota>({ used: 0, total: 400, remaining: 400, resetAt: null });
+  const [prospectQuota, setProspectQuota] = useState<ProspectQuota>({ used: 0, total: 2500, remaining: 2500, resetAt: null });
   const [hasSalesNav, setHasSalesNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMembershipStatus((membership?.status as MembershipStatus) ?? 'trialing');
       setTrialEndsAt(membership?.current_period_end ?? null);
 
-      const quotaMap: Record<string, number> = { free: 400, starter: 400, pro: 2000, coach: 0 };
+      const quotaMap: Record<string, number> = { free: 2500, starter: 2500, pro: 5000, coach: 0 };
       const planKey = (membership?.plan as string) ?? 'free';
       const total = (membership as any)?.prospects_import_quota_override ?? quotaMap[planKey] ?? 0;
       const used = membership?.prospects_imported_count ?? 0;
