@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useUnipileAccount } from '@/hooks/useUnipileAccount';
+import { useRequireLinkedInAccount } from '@/hooks/useRequireLinkedInAccount';
 import {
   useUnipileConversations,
   type UnipileConversation,
@@ -239,11 +239,12 @@ function useFullLead(leadId: string | null, enabled: boolean) {
 }
 
 export default function Inbox() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { account, loading: accountLoading } = useUnipileAccount();
+  const { account, loading: accountLoading } = useRequireLinkedInAccount(
+    "Connectez votre compte LinkedIn pour accéder à l'Inbox.",
+  );
   const [selected, setSelected] = useState<UnipileConversation | null>(null);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
@@ -277,17 +278,6 @@ export default function Inbox() {
     setReadIds((prev) => new Set([...prev, c.id]));
   };
 
-  // Redirect guard
-  useEffect(() => {
-    if (!accountLoading && !account) {
-      toast({
-        title: 'LinkedIn non connecté',
-        description: 'Connectez votre compte LinkedIn pour accéder à l\'Inbox.',
-        className: 'bg-primary border-primary text-white [&>div>*:first-child]:text-base [&>div>*:first-child]:font-bold [&>div>*:first-child]:text-white',
-      });
-      navigate('/settings?tab=linkedin', { replace: true });
-    }
-  }, [accountLoading, account, navigate, toast]);
 
   const {
     conversations,

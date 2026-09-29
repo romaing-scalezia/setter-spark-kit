@@ -4,7 +4,7 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useUnipileAccount } from '@/hooks/useUnipileAccount';
+import { useRequireLinkedInAccount } from '@/hooks/useRequireLinkedInAccount';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -247,19 +247,7 @@ export default function CampaignNew() {
   const { user, hasSalesNav, activeRole } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { account: unipileAccount, loading: unipileLoading } = useUnipileAccount();
-
-  useEffect(() => {
-    if (unipileLoading) return;
-    if (unipileAccount === null) {
-      toast({
-        title: 'LinkedIn non connecté',
-        description: 'Connectez votre compte LinkedIn pour créer une campagne.',
-        className: 'bg-primary border-primary text-white [&>div>*:first-child]:text-base [&>div>*:first-child]:font-bold [&>div>*:first-child]:text-white',
-      });
-      navigate('/settings?tab=linkedin', { replace: true });
-    }
-  }, [unipileAccount, unipileLoading, navigate, toast]);
+  useRequireLinkedInAccount('Connectez votre compte LinkedIn pour créer une campagne.');
 
   const [step, setStep]                 = useState<1 | 2 | 3 | 4>(1);
   const [name, setName]                 = useState('');
