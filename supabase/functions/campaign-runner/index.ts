@@ -192,14 +192,23 @@ serve(async (req) => {
     console.log(`[campaign-runner] user ${userId}: ${jobs?.length ?? 0} jobs, error: ${jobsError?.message ?? 'none'}`);
     if (jobsError || !jobs || jobs.length === 0) return 0;
 
-    // Récupère le compte Unipile une seule fois pour cet user
+    // Récupère le compte Unipile une seule fois pour cet user. On exige
+    // status="connected" : un compte encore "connecting" (checkpoint LinkedIn
+    // jamais valide) a un account_id qui existe en base mais n'est pas
+    // fonctionnel cote Unipile — executer les jobs dessus echouerait pour
+    // rien plutot que de simplement attendre que l'utilisateur termine sa
+    // connexion.
     const { data: unipileAccount } = await admin
       .from("unipile_accounts")
       .select("account_id")
       .eq("user_id", userId)
-      .single();
+      .eq("status", "connected")
+      .maybeSingle();
 
-    if (!unipileAccount) return 0;
+    if (!unipileAccount) {
+      console.log(`[campaign-runner] user ${userId}: no connected LinkedIn account, skipping`);
+      return 0;
+    }
     const accountId = unipileAccount.account_id;
 
     let processed = 0;
