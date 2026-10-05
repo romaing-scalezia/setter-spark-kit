@@ -20,6 +20,7 @@ import {
   Shield, Users, Loader2, Trash2, Plus, UserPlus, Search,
   Eye, Linkedin, AlertTriangle, TrendingUp, Clock, CheckCircle2,
   Sparkles, CalendarPlus, X, BookOpen, Tag, Edit2, Gauge, Copy, Check,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import type { AppRole } from '@/lib/constants';
 import { format, differenceInDays } from 'date-fns';
@@ -58,6 +59,7 @@ interface EnrichedUser {
   debug_role_switch_enabled: boolean;
   membership: Membership | null;
   linkedin_connected: boolean;
+  unipile_account_id: string | null;
   has_sales_nav: boolean;
   leads_count: number;
   campaigns: { active: number; paused: number; completed: number };
@@ -103,6 +105,8 @@ export default function AdminPage() {
   const [planFilter, setPlanFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [linkedinFilter, setLinkedinFilter] = useState('all');
+  const [sortKey, setSortKey] = useState<'leads_count' | 'created_at' | 'last_sign_in_at' | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedUser, setSelectedUser] = useState<EnrichedUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<EnrichedUser | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -204,6 +208,26 @@ export default function AdminPage() {
     if (linkedinFilter === 'no' && u.linkedin_connected) return false;
     return true;
   }), [users, search, roleFilter, planFilter, sourceFilter, linkedinFilter]);
+
+  const sorted = useMemo(() => {
+    if (!sortKey) return filtered;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'leads_count') return (a.leads_count - b.leads_count) * dir;
+      const aTime = a[sortKey] ? new Date(a[sortKey] as string).getTime() : 0;
+      const bTime = b[sortKey] ? new Date(b[sortKey] as string).getTime() : 0;
+      return (aTime - bTime) * dir;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
 
   const getName = (id: string) => {
     const u = users.find(u => u.id === id);
@@ -597,14 +621,29 @@ export default function AdminPage() {
                           <TableHead>Source</TableHead>
                           <TableHead>LinkedIn</TableHead>
                           <TableHead>Sales Nav</TableHead>
-                          <TableHead className="text-right">Leads</TableHead>
-                          <TableHead>Inscription</TableHead>
-                          <TableHead>Dernière co.</TableHead>
+                          <TableHead className="text-right">
+                            <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort('leads_count')}>
+                              Leads
+                              {sortKey === 'leads_count' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort('created_at')}>
+                              Inscription
+                              {sortKey === 'created_at' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+                            </button>
+                          </TableHead>
+                          <TableHead>
+                            <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => toggleSort('last_sign_in_at')}>
+                              Dernière co.
+                              {sortKey === 'last_sign_in_at' ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+                            </button>
+                          </TableHead>
                           <TableHead className="w-[80px]" />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.map(u => (
+                        {sorted.map(u => (
                           <TableRow key={u.id}>
                             <TableCell>
                               <div>
@@ -1042,6 +1081,7 @@ export default function AdminPage() {
                     { label: 'Essai restant', value: selectedUser.membership?.trial_days_left != null ? `${selectedUser.membership.trial_days_left} jours` : '—' },
                     { label: 'Leads', value: String(selectedUser.leads_count) },
                     { label: 'LinkedIn', value: selectedUser.linkedin_connected ? 'Connecté' : 'Non connecté' },
+                    { label: 'Unipile account_id', value: selectedUser.unipile_account_id || '—', mono: true },
                     { label: 'Sales Nav', value: selectedUser.has_sales_nav ? 'Oui' : 'Non' },
                     { label: 'Campagnes', value: `${selectedUser.campaigns.active} active · ${selectedUser.campaigns.paused} pause · ${selectedUser.campaigns.completed} terminée` },
                     { label: 'Import Sales Nav', value: selectedUser.sales_nav_import.quota > 0 ? `${selectedUser.sales_nav_import.count} / ${selectedUser.sales_nav_import.quota} ce mois` : `${selectedUser.sales_nav_import.count} importés` },
@@ -1050,10 +1090,10 @@ export default function AdminPage() {
                     { label: 'Inscription', value: fmt(selectedUser.created_at) },
                     { label: 'Dernière co.', value: fmt(selectedUser.last_sign_in_at) },
                     { label: 'Email confirmé', value: selectedUser.email_confirmed_at ? 'Oui' : 'Non' },
-                  ].map(({ label, value }) => (
+                  ].map(({ label, value, mono }) => (
                     <div key={label}>
                       <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="text-sm font-medium mt-0.5">{value}</p>
+                      <p className={`text-sm font-medium mt-0.5 ${mono ? 'font-mono text-xs break-all' : ''}`}>{value}</p>
                     </div>
                   ))}
                 </div>

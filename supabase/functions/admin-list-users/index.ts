@@ -106,7 +106,7 @@ serve(async (req) => {
       campaignCountsMap.set(row.user_id, counts);
     }
 
-    const PROSPECT_QUOTA: Record<string, number> = { free: 400, starter: 400, pro: 2000, coach: 0 };
+    const PROSPECT_QUOTA: Record<string, number> = { free: 2500, starter: 2500, pro: 5000, coach: 0 };
 
     // Live Stripe lookup: local `memberships` rows only mirror webhook events, which can
     // drift (missed events, hardcoded plan on checkout, etc). Pulling the subscription
@@ -222,6 +222,7 @@ serve(async (req) => {
           cancel_at_period_end: live?.cancelAtPeriodEnd ?? false,
         } : null,
         linkedin_connected: !!unipile && unipile.status === "connected",
+        unipile_account_id: unipile?.account_id ?? null,
         has_sales_nav: (profile as any).has_sales_nav || false,
         leads_count: leadsCountMap.get(u.id) || 0,
         campaigns: {
