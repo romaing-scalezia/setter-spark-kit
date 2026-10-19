@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, ArrowLeft, Play, Pause, Pencil, CheckCircle2, UserCheck, Mail, Users, Trash2, Send } from 'lucide-react';
 import { format } from 'date-fns';
@@ -23,13 +25,22 @@ import { fr } from 'date-fns/locale';
 import { useCampaignDetail } from '@/hooks/useCampaignDetail';
 import type { CampaignStatus, CampaignLead } from '@/hooks/useCampaignDetail';
 import { useUnipileAccount } from '@/hooks/useUnipileAccount';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import {
   CAMPAIGN_STATUS_LABELS,
   CAMPAIGN_STATUS_STYLES,
   CAMPAIGN_LEAD_STATUS_STYLES,
   CAMPAIGN_LEAD_STATUS_LABELS,
 } from '@/lib/constants';
+
+function applyLeadVariables(text: string, lead: CampaignLead) {
+  return text
+    .replace(/{{first_name}}/g,   lead.first_name   ?? '')
+    .replace(/{{last_name}}/g,    lead.last_name    ?? '')
+    .replace(/{{company_name}}/g, lead.company_name ?? '');
+}
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -56,11 +67,26 @@ export default function CampaignDetail() {
   const navigate = useNavigate();
   const { detail, isLoading, toggleStatus, deleteLeads, sendManualMessage } = useCampaignDetail(id);
   const { account: unipileAccount } = useUnipileAccount();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [messageLead, setMessageLead] = useState<CampaignLead | null>(null);
   const [messageText, setMessageText] = useState('');
+
+  const { data: messageTemplates = [] } = useQuery({
+    queryKey: ['message-templates', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('coaching_contents')
+        .select('id, title, body')
+        .eq('type', 'script')
+        .order('title');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user,
+  });
 
   if (isLoading) {
     return (
@@ -353,6 +379,26 @@ export default function CampaignDetail() {
               Message envoyé directement via LinkedIn, sans quitter SetterFlow.
             </DialogDescription>
           </DialogHeader>
+          {messageTemplates.length > 0 && (
+            <Select
+              value=""
+              onValueChange={(templateId) => {
+                const template = messageTemplates.find((t) => t.id === templateId);
+                if (template && messageLead) {
+                  setMessageText(applyLeadVariables(template.body, messageLead));
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Insérer un template..." />
+              </SelectTrigger>
+              <SelectContent>
+                {messageTemplates.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
