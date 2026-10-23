@@ -61,12 +61,19 @@ serve(async (req) => {
 
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
-        const { data: membership } = await admin
+        const { data: membership, error: lookupError } = await admin
           .from("memberships")
           .select("user_id")
           .eq("stripe_subscription_id", sub.id)
           .maybeSingle();
-        if (!membership) break;
+        if (lookupError) {
+          console.error("[stripe-webhook] customer.subscription.updated lookup failed:", lookupError, "sub:", sub.id);
+          break;
+        }
+        if (!membership) {
+          console.warn("[stripe-webhook] customer.subscription.updated: no membership found for sub", sub.id);
+          break;
+        }
 
         const status = sub.status === "active" ? "active"
           : sub.status === "past_due" ? "past_due"
@@ -85,12 +92,19 @@ serve(async (req) => {
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        const { data: membership } = await admin
+        const { data: membership, error: lookupError } = await admin
           .from("memberships")
           .select("user_id")
           .eq("stripe_subscription_id", sub.id)
           .maybeSingle();
-        if (!membership) break;
+        if (lookupError) {
+          console.error("[stripe-webhook] customer.subscription.deleted lookup failed:", lookupError, "sub:", sub.id);
+          break;
+        }
+        if (!membership) {
+          console.warn("[stripe-webhook] customer.subscription.deleted: no membership found for sub", sub.id);
+          break;
+        }
 
         const { error } = await admin.from("memberships").update({
           plan: "free",
