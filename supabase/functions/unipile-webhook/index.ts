@@ -155,13 +155,80 @@ serve(async (req) => {
         ?? (payload as any)?.user_provider_id;
       if (attendeeProviderId) {
         const now = new Date().toISOString();
-        const { error, count } = await admin
+        const { data: updatedLeads, error } = await admin
           .from("campaign_leads")
-          .update({ accepted_at: now, status: "accepted" }, { count: "exact" })
+          .update({ accepted_at: now, status: "accepted" })
           .eq("provider_id", attendeeProviderId)
-          .is("accepted_at", null);
-        if (error) console.error("[unipile-webhook] accepted update error:", error);
-        else console.log("[unipile-webhook] accepted update matched rows:", count);
+          .is("accepted_at", null)
+          .select("id, campaign_id, user_id, first_name, last_name, company_name, linkedin_url");
+
+        if (error) {
+          console.error("[unipile-webhook] accepted update error:", error);
+        } else {
+          console.log("[unipile-webhook] accepted update matched rows:", updatedLeads?.length ?? 0);
+
+          // Scenario A (visite + invitation, sans message automatise) : il n'y a
+          // pas de job "message_1" pour detecter l'acceptation et creer le lead
+          // + la tache de suivi (contrairement aux scenarios B/C/D). On le fait
+          // ici, directement a l'acceptation, avec une tache "Demarrer la
+          // conversation" plutot que "Relancer la conversation" puisqu'aucun
+          // message n'a encore ete envoye.
+          for (const cl of updatedLeads ?? []) {
+            const { data: campaign } = await admin
+              .from("campaigns")
+              .select("scenario_type")
+              .eq("id", cl.campaign_id)
+              .maybeSingle();
+            if (campaign?.scenario_type !== "A") continue;
+
+            const { data: existingLead } = await admin
+              .from("leads")
+              .select("id")
+              .eq("owner_id", cl.user_id)
+              .eq("linkedin_url", cl.linkedin_url)
+              .maybeSingle();
+
+            let leadId = existingLead?.id;
+            if (!leadId) {
+              const { data: newLead, error: leadInsertError } = await admin.from("leads").insert({
+                owner_id:                cl.user_id,
+                first_name:              cl.first_name,
+                last_name:               cl.last_name,
+                company_name:            cl.company_name,
+                linkedin_url:            cl.linkedin_url,
+                status:                  "conversation_engagee",
+                outreach_type:           "autre",
+                conversation_started_at: now,
+              }).select("id").single();
+              if (leadInsertError) console.error("[unipile-webhook] scenario A leads insert failed:", leadInsertError);
+              leadId = newLead?.id;
+
+              if (leadId) {
+                await admin.from("lead_events").insert({
+                  lead_id: leadId, user_id: cl.user_id,
+                  event_type: "status_changed", new_value: "conversation_engagee",
+                });
+              }
+            }
+
+            if (leadId) {
+              // L'insert ci-dessus declenche handle_lead_status_task(), qui cree
+              // automatiquement un "conversation_followup" — on le remplace par
+              // "start_conversation", plus juste pour ce cas (rien n'a ete envoye).
+              await admin.from("tasks")
+                .update({ status: "cancelled", updated_at: now })
+                .eq("lead_id", leadId)
+                .eq("status", "pending")
+                .eq("task_type", "conversation_followup")
+                .eq("source", "auto");
+
+              await admin.from("tasks").insert({
+                lead_id: leadId, user_id: cl.user_id, task_type: "start_conversation",
+                priority: "high", due_date: now.slice(0, 10), source: "auto",
+              });
+            }
+          }
+        }
       } else {
         console.warn("[unipile-webhook] acceptance event without provider id:", eventType);
       }

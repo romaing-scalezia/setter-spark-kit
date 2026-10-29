@@ -11,6 +11,7 @@ export const TASK_TYPE_LABELS: Record<TaskType, string> = {
   booking_followup: "Relancer la prise de RDV",
   manual_followup: 'Follow-up manuel',
   rdv_result: 'Résultat du RDV',
+  start_conversation: 'Démarrer la conversation',
 };
 
 export const PRIORITY_META: Record<TaskPriority, { label: string; emoji: string; className: string }> = {
